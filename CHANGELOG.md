@@ -2,6 +2,13 @@
 
 ## 0.1.0-preview.1 (unreleased)
 
+- Verify optional agent descriptions at the Foundry latest-version readback
+  location; accept omitted descriptions without creating duplicate immutable
+  versions, while keeping strict managed-field checks and field-specific errors.
+- Resolve the azd credential tenant through the effective environment's selected
+  subscription and public account API. Pass an explicit validated tenant for
+  Discovery and ACR verification, avoiding Bicep deployment-context lookup in
+  Terraform projects.
 - Recover from definitive rejected submissions and terminal failed operations
   while retaining ambiguous-submission protection; repair failed app resources.
 - Verify literal tool references and reject duplicate managed targets and

@@ -60,14 +60,14 @@ func Register(host *azdext.ExtensionHost) {
 		},
 		Container: containerRPC{client},
 		Cloud: func(ctx context.Context) (*discovery.Client, error) {
-			credential, err := azdext.NewTokenProvider(ctx, client, nil)
+			credential, err := newTokenProvider(ctx, client)
 			if err != nil {
 				return nil, err
 			}
 			return discovery.NewClient(credential), nil
 		},
 		Digest: func(ctx context.Context, image, imageHash string) (string, error) {
-			credential, err := azdext.NewTokenProvider(ctx, client, nil)
+			credential, err := newTokenProvider(ctx, client)
 			if err != nil {
 				return "", err
 			}
@@ -78,17 +78,7 @@ func Register(host *azdext.ExtensionHost) {
 			return registry.Resolve(ctx, image)
 		},
 		Environment: func(ctx context.Context) (string, error) {
-			if name := os.Getenv("AZD_ENVIRONMENT"); name != "" {
-				return name, nil
-			}
-			response, err := client.Environment().GetCurrent(ctx, &azdext.EmptyRequest{})
-			if err != nil {
-				return "", err
-			}
-			if response.GetEnvironment().GetName() == "" {
-				return "", errors.New("azd returned no current environment")
-			}
-			return response.Environment.Name, nil
+			return currentEnvironment(ctx, client)
 		},
 		Export: func(ctx context.Context, key, value string) error {
 			_, err := client.Environment().SetValue(ctx, &azdext.SetEnvRequest{

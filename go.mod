@@ -53,7 +53,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/golobby/container/v3 v3.3.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/jsonschema v0.13.0

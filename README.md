@@ -41,6 +41,13 @@ Terraform provision → container build/package → ACR publish
 | Terraform | For the demo's infrastructure provisioning |
 | Azure permissions | Provision deployment access and Discovery image access through IaC |
 
+Authentication stays with azd. For both Discovery requests and ACR digest
+verification, the extension reads `AZURE_SUBSCRIPTION_ID` from the effective azd
+environment and resolves its tenant through the public account API. It validates
+the IDs and supplies the tenant explicitly to the SDK token provider, without
+deployment-context lookup or Bicep compilation. No separate tenant setting is
+needed; a missing or invalid subscription selection blocks credential creation.
+
 From this extension's repository root, build and install a local bundle:
 
 ```sh
@@ -304,6 +311,13 @@ process-local.
   registered definition and version by GET.
 - Resolve agent bindings during Deploy—not Package—and verify the latest
   agent version before exporting results.
+- Description is sent in `foundryDetails.description`. The
+  [Foundry response contract](https://github.com/Azure/azure-rest-api-specs/blob/2927d4ca395b75c4d4b879755dabfb32cb981687/specification/ai-foundry/data-plane/Foundry/src/agents/models.tsp)
+  returns it optionally at `foundryDetails.versions.latest.description`.
+  A returned mismatch fails verification; omission does not imply failure or
+  trigger another immutable version when all other managed fields match.
+  Name, model, instructions, tools, confirmation policies, extension flags,
+  provisioning state, and a nonempty version remain strictly verified.
 
 ### Exported environment values
 
@@ -381,7 +395,7 @@ Build and validation notes:
 | Container publication | Offline-tested; live ACR credentials/RBAC and Podman push remain unverified |
 | Discovery API | Offline-tested; endpoint, payload, readiness, and recovery behavior need authorized tenant testing |
 | API versions | Tool ARM API: `2026-06-01`; agent workspace API: `2026-02-01-preview` |
-| Endpoint and authentication | Tool IDs use workspace subscription/RG; workspace endpoint derives from verified name; SDK credentials use ARM/Discovery audiences |
+| Endpoint and authentication | Tool IDs use workspace subscription/RG; workspace endpoint derives from verified name; SDK credentials use the selected subscription's resolved tenant and ARM/Discovery audiences |
 | GPU workloads | Not certified |
 | Knowledge bases | No KB target, upload, indexing, attachment, or status/index command |
 | KB follow-up questions | Storage-location resolution, GA agent attachment, and whether optional source identity can be omitted |
@@ -395,15 +409,17 @@ Further detail: [configuration schema](schemas/discovery.schema.json) ·
 
 ## Roadmap
 
-The tool/agent lifecycle is implemented and locally tested. The next priority is
-live validation, not additional service types. Cloud tests require explicit
-authorization; CI remains Linux-only.
+The tool/agent lifecycle is implemented and tested locally and on GitHub's Linux
+runner. Both quality and native smoke-test jobs passed for `c9189fe` in
+[the first hosted CI run](https://github.com/ikhemissi/azd-microsoft-discovery/actions/runs/38085870149).
+The next priority is live validation, not additional service types. Cloud tests
+require explicit authorization; CI remains Linux-only.
 
 ### 1. Validate the first iteration
 
 | Task | Completion criteria |
 | --- | --- |
-| Run hosted CI | Linux quality and native smoke-test jobs pass after the first commit/push |
+| Run hosted CI | Complete: Linux quality and native smoke-test jobs passed for `c9189fe`; keep these checks passing |
 | Test a newer azd host | Existing packaging and command tests pass alongside the pinned minimum host |
 | Migrate the GROMACS demo | Add the model-name Terraform output and replace the old hook with native services |
 | Validate build mode in Azure | Provision, publish to ACR, verify the digest, register the tool, and deploy the agent with correct bindings |

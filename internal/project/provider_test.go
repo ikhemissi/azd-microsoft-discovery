@@ -225,6 +225,7 @@ func (f *fakeCloud) client() *discovery.Client {
 				f.agent = &discovery.Agent{AgentPayload: payload, ProvisioningState: "Succeeded"}
 				f.agent.FoundryDetails.Versions = &discovery.AgentVersions{}
 				f.agent.FoundryDetails.Versions.Latest.Version = "1"
+				f.agent.FoundryDetails.Versions.Latest.Description = &payload.FoundryDetails.Description
 				f.agent.FoundryDetails.Versions.Latest.Definition = payload.FoundryDetails.Definition
 				if f.ambiguous {
 					return nil, errors.New("lost POST response")

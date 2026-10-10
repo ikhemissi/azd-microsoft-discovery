@@ -17,6 +17,18 @@ func TestAgentAdapterAgainstIndependentReadback(t *testing.T) {
 	if err := json.Unmarshal(data, &remote); err != nil {
 		t.Fatal(err)
 	}
+	payload := contractPayload(t)
+	if err := VerifyAgent(&remote, payload); err != nil {
+		t.Fatal(err)
+	}
+	remote.FoundryDetails.Versions.Latest.Definition["model"] = "unexpected"
+	if err := VerifyAgent(&remote, payload); err == nil {
+		t.Fatal("independent readback mismatch was accepted")
+	}
+}
+
+func contractPayload(t *testing.T) *AgentPayload {
+	t.Helper()
 	payload, err := Payload(map[string]any{
 		"name": "researcher", "kind": "prompt", "model": map[string]any{"id": "chat"},
 		"description": "Offline contract fixture", "instructions": "Keep {{runtime}} and ${LITERAL}.",
@@ -31,11 +43,5 @@ func TestAgentAdapterAgainstIndependentReadback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := VerifyAgent(&remote, payload); err != nil {
-		t.Fatal(err)
-	}
-	remote.FoundryDetails.Versions.Latest.Definition["model"] = "unexpected"
-	if err := VerifyAgent(&remote, payload); err == nil {
-		t.Fatal("independent readback mismatch was accepted")
-	}
+	return payload
 }

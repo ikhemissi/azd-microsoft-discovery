@@ -10,10 +10,10 @@
   ],
   "discoveryExtensions": {},
   "foundryDetails": {
-    "description": "Offline contract fixture",
     "versions": {
       "latest": {
         "version": "1",
+        "description": "Offline contract fixture",
         "definition": {
           "kind": "prompt",
           "model": "chat",

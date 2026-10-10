@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/ikhemissi/azd-microsoft-discovery/internal/config"
 )
@@ -130,8 +133,10 @@ type FoundryDetails struct {
 
 type AgentVersions struct {
 	Latest struct {
-		Version    string         `json:"version"`
-		Definition map[string]any `json:"definition"`
+		Version string `json:"version"`
+		// Foundry returns description on the version, not the agent object.
+		Description *string        `json:"description,omitempty"`
+		Definition  map[string]any `json:"definition"`
 	} `json:"latest"`
 }
 
@@ -171,20 +176,83 @@ func Payload(definition map[string]any) (*AgentPayload, error) {
 }
 
 func VerifyAgent(agent *Agent, expected *AgentPayload) error {
-	if agent == nil || agent.FoundryDetails.Versions == nil || agent.ProvisioningState != "Succeeded" {
-		return errors.New("agent readback is not Succeeded")
+	if agent == nil {
+		return errors.New("agent readback is missing")
 	}
-	if agent.Name != expected.Name || !reflect.DeepEqual(agent.HumanInTheLoop, expected.HumanInTheLoop) ||
-		!reflect.DeepEqual(agent.Tools, expected.Tools) ||
-		!reflect.DeepEqual(agent.DiscoveryExtensions, expected.DiscoveryExtensions) ||
-		agent.FoundryDetails.Description != expected.FoundryDetails.Description ||
-		agent.FoundryDetails.Versions.Latest.Version == "" {
-		return errors.New("agent managed configuration/version readback mismatch")
+	if agent.ProvisioningState != "Succeeded" {
+		return errors.New("agent readback mismatch: provisioningState (expected Succeeded)")
 	}
-	for key, value := range expected.FoundryDetails.Definition {
-		if !reflect.DeepEqual(agent.FoundryDetails.Versions.Latest.Definition[key], value) {
-			return fmt.Errorf("agent latest definition readback mismatch: %s", key)
+	if agent.FoundryDetails.Versions == nil {
+		return errors.New("agent readback is missing foundryDetails.versions.latest")
+	}
+	latest := agent.FoundryDetails.Versions.Latest
+	if strings.TrimSpace(latest.Version) == "" {
+		return errors.New("agent readback is missing foundryDetails.versions.latest.version")
+	}
+	if latest.Definition == nil {
+		return errors.New("agent readback is missing foundryDetails.versions.latest.definition")
+	}
+	for _, field := range []struct {
+		path            string
+		actual, desired any
+	}{
+		{"name", agent.Name, expected.Name},
+		{"humanInTheLoop", agent.HumanInTheLoop, expected.HumanInTheLoop},
+		{"tools", agent.Tools, expected.Tools},
+		{"discoveryExtensions", agent.DiscoveryExtensions, expected.DiscoveryExtensions},
+	} {
+		if err := verifyField(field.path, field.actual, field.desired); err != nil {
+			return err
+		}
+	}
+	if latest.Description != nil {
+		if err := verifyField("foundryDetails.versions.latest.description", *latest.Description, expected.FoundryDetails.Description); err != nil {
+			return err
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(expected.FoundryDetails.Definition)) {
+		if err := verifyField("foundryDetails.versions.latest.definition."+key,
+			latest.Definition[key], expected.FoundryDetails.Definition[key]); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// Report the differing field without exposing prompts, IDs, or other values.
+func verifyField(path string, actual, desired any) error {
+	if reflect.DeepEqual(actual, desired) {
+		return nil
+	}
+	switch want := desired.(type) {
+	case map[string]any:
+		if got, ok := actual.(map[string]any); ok && (got == nil) == (want == nil) {
+			for _, key := range slices.Sorted(maps.Keys(want)) {
+				value, exists := got[key]
+				if !exists {
+					return fmt.Errorf("agent readback mismatch: %s.%s (missing)", path, key)
+				}
+				if err := verifyField(path+"."+key, value, want[key]); err != nil {
+					return err
+				}
+			}
+			for _, key := range slices.Sorted(maps.Keys(got)) {
+				if _, exists := want[key]; !exists {
+					return fmt.Errorf("agent readback mismatch: %s.%s (unexpected)", path, key)
+				}
+			}
+		}
+	case []any:
+		if got, ok := actual.([]any); ok && (got == nil) == (want == nil) {
+			if len(got) != len(want) {
+				return fmt.Errorf("agent readback mismatch: %s.length", path)
+			}
+			for i := range want {
+				if err := verifyField(fmt.Sprintf("%s[%d]", path, i), got[i], want[i]); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return fmt.Errorf("agent readback mismatch: %s", path)
 }

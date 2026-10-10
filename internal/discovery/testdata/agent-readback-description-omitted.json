@@ -1,0 +1,24 @@
+{
+  "name": "researcher",
+  "provisioningState": "Succeeded",
+  "humanInTheLoop": "Enabled",
+  "tools": [
+    {
+      "toolId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.Discovery/tools/demo-tool",
+      "confirmation": "Enabled"
+    }
+  ],
+  "discoveryExtensions": {},
+  "foundryDetails": {
+    "versions": {
+      "latest": {
+        "version": "1",
+        "definition": {
+          "kind": "prompt",
+          "model": "chat",
+          "instructions": "Keep {{runtime}} and ${LITERAL}."
+        }
+      }
+    }
+  }
+}
