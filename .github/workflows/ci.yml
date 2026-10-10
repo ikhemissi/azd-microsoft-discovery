@@ -2,13 +2,16 @@ name: Linux quality checks
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: discovery-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -65,7 +68,7 @@ jobs:
         run: |
           echo "AZD_CONFIG_DIR=$RUNNER_TEMP/discovery-azd" >> "$GITHUB_ENV"
           sudo apt-get update
-          sudo apt-get install -y podman
+          sudo apt-get install -y podman jq
           curl --fail --location --retry 3 \
             https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.35.0/azd-linux-amd64.tar.gz \
             --output "$RUNNER_TEMP/azd.tar.gz"
@@ -78,10 +81,27 @@ jobs:
         run: |
           azd extension install microsoft.azd.extensions --version 0.13.0
           azd x build
+          version="$(./bin/ikhemissi-azd-discovery-linux-amd64 version --output json | jq -er '.version')"
           azd x pack --bundle --output ./artifacts
-          azd extension install ./artifacts/ikhemissi-azd-discovery_0.1.0-preview.1.zip --force
+          azd extension install "./artifacts/ikhemissi-azd-discovery_${version}.zip" --force
           azd discovery version
       - name: Native offline smoke tests
         run: |
           go test -count=1 -v \
             -run 'Test(NativeContainerPackage|NativeReferencePackage|(Native|Standalone)ReadOnlyCommands)' .
+      - name: Verify release bundle and write checksum
+        run: |
+          version="$(./bin/ikhemissi-azd-discovery-linux-amd64 version --output json | jq -er '.version')"
+          export DISCOVERY_RELEASE_BUNDLE="$PWD/artifacts/ikhemissi-azd-discovery_${version}.zip"
+          go test -count=1 -v -run '^TestLinuxReleaseBundle$' .
+          cd artifacts
+          sha256sum "ikhemissi-azd-discovery_${version}.zip" > SHA256SUMS
+      - name: Upload tested extension bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: discovery-bundle-linux-amd64
+          path: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,71 @@
+name: Publish GitHub release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discovery-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify tag and extension version
+        run: |
+          go test -count=1 -v \
+            -run '^Test(ManifestVersionMatchesBinaryDefault|ReleaseVersionMatchesTag)$' .
+
+  checks:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the tested bundle from this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: discovery-bundle-linux-amd64
+          path: artifacts
+      - name: Verify checksum and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          version="${RELEASE_TAG#v}"
+          bundle="ikhemissi-azd-discovery_${version}.zip"
+          test -s "$bundle"
+          sha256sum --check SHA256SUMS
+
+          flags=()
+          if [[ "${version%%+*}" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+
+          notes="Linux amd64 extension bundle; requires azd >=1.35.0.
+          Install: azd extension install https://github.com/${GH_REPO}/releases/download/${RELEASE_TAG}/${bundle}
+          SHA256SUMS covers the exact CI-tested bundle. This release does not imply cloud or GPU certification."
+
+          gh release create "$RELEASE_TAG" "$bundle" SHA256SUMS \
+            --repo "$GH_REPO" --verify-tag --title "$RELEASE_TAG" \
+            --generate-notes --notes "$notes" "${flags[@]}"

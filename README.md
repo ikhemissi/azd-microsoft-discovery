@@ -35,11 +35,32 @@ Terraform provision → container build/package → ACR publish
 | Requirement | Version or purpose |
 | --- | --- |
 | azd | `>=1.35.0`; SDK and compatibility tests are pinned to `1.35.0` |
-| Go | `>=1.26.4`, required by the pinned SDK |
-| Extension developer tooling | `microsoft.azd.extensions` version `0.13.0` |
 | Container runtime | Docker or working local Podman for build mode |
 | Terraform | For the demo's infrastructure provisioning |
 | Azure permissions | Provision deployment access and Discovery image access through IaC |
+
+### Install a published release
+
+GitHub Release bundles support **Linux amd64**. Users do not need Go, a clone of
+this repository, or extension developer tooling to install them.
+
+Choose a published version from [GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases):
+
+```sh
+# Replace with an existing published version; the workflow does not create
+# a release until a matching version tag is pushed.
+VERSION=0.1.0-preview.1
+azd extension install \
+  "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
+azd discovery version
+```
+
+- Upgrade by installing the bundle URL for a newer version. Bundle installations
+  do not track a registry for automatic `azd extension update`.
+- Use `--force` only when deliberately reinstalling or replacing an installed build.
+- Install into the same `AZD_CONFIG_DIR` used for your application.
+- Each release includes `SHA256SUMS`. A checksum detects corruption but is not
+  a publisher signature; download only from a trusted repository.
 
 Authentication stays with azd. For both Discovery requests and ACR digest
 verification, the extension reads `AZURE_SUBSCRIPTION_ID` from the effective azd
@@ -48,7 +69,10 @@ the IDs and supplies the tenant explicitly to the SDK token provider, without
 deployment-context lookup or Bicep compilation. No separate tenant setting is
 needed; a missing or invalid subscription selection blocks credential creation.
 
-From this extension's repository root, build and install a local bundle:
+### Build and install locally
+
+Developers also need Go `>=1.26.4` and `microsoft.azd.extensions` `0.13.0`.
+From this extension's repository root:
 
 ```sh
 export AZD_CONFIG_DIR=/absolute/path/to/isolated-azd-config
@@ -66,7 +90,8 @@ normal extension installation or container credentials.
 
 > Install the bundle after building. On this tooling version, `azd x build`
 > alone can retain stale provider metadata and cause an “unsupported host” error.
-> No public extension-registry release has been published.
+> A custom or official extension-registry listing is not required for release
+> URL installation.
 
 ## Set up the GROMACS demo
 
@@ -349,6 +374,22 @@ CI is **Linux-only** and covers:
 - Documentation examples, independent readback fixtures, and failure/recovery regressions.
 - A fresh bundle installed on azd 1.35.0, followed by native offline smoke tests.
 
+Successful CI runs upload `discovery-bundle-linux-amd64`, containing the tested
+bundle and its checksum, with 30-day retention. Download a specific development
+build using authenticated GitHub CLI:
+
+```sh
+gh run download <run-id> --repo ikhemissi/azd-microsoft-discovery \
+  --name discovery-bundle-linux-amd64 --dir ./downloaded-extension
+cd downloaded-extension
+sha256sum --check SHA256SUMS
+azd extension install ./ikhemissi-azd-discovery_<version>.zip --force
+```
+
+The artifact contains the extension ZIP directly after `gh run download` extracts
+GitHub's outer archive. Actions artifacts are temporary; use Releases for persistent
+versioned distribution.
+
 Run quality checks from the extension repository:
 
 ```sh
@@ -386,6 +427,37 @@ Build and validation notes:
   by Git. Build/package/test commands recreate them; they are not source assets.
 - Build scripts use `-trimpath`, disable CGO, and support a repository with no
   commits by setting commit metadata to `none`.
+
+### Publish a GitHub Release
+
+Release automation remains Linux-only. Pushing a `v<version>` tag:
+
+1. Validates that the tag matches both the manifest and binary default version.
+2. Runs the same Linux quality and native packaging checks as normal CI.
+3. Validates the bundle's version, Linux platform, and embedded artifact checksum.
+4. Downloads that run's tested bundle, verifies `SHA256SUMS`, and publishes both
+   files to GitHub Releases without rebuilding.
+
+Versions containing a prerelease suffix, such as `-preview.1`, are marked as
+GitHub prereleases and are not marked “Latest”. Existing releases are never
+silently overwritten; use a new version rather than moving a published tag.
+Only the final publishing job has `contents: write`; PR and test jobs cannot
+publish a release. No Azure credentials, provision, or deployment commands are
+used by release automation.
+
+To prepare a release:
+
+```sh
+# First set the same new version in extension.yaml and
+# internal/cmd/version.go, then commit those changes.
+VERSION=0.1.0-preview.1
+go test -count=1 -run '^TestManifestVersionMatchesBinaryDefault$' .
+git tag -a "v${VERSION}" -m "Release ${VERSION}"
+git push origin main "v${VERSION}"
+```
+
+Choose a new version for each release. This adds publication support but does
+not itself create a tag or publish a release.
 
 ## Known limits and remaining verification
 
@@ -431,10 +503,12 @@ differences exposed by these tests before calling the preview cloud-verified.
 
 ### 2. Publish a usable preview
 
-- Publish a versioned bundle, checksums, and validated registry metadata.
+- Release automation is implemented; publish the first versioned bundle and
+  checksum by pushing a matching tag after committing these changes.
 - Verify installation from the published release in a clean, isolated configuration.
 - Pin the extension version in demo instructions.
 - Record tested host/runtime versions and remaining limitations.
+- Optionally add a custom azd registry later for install-by-ID and automatic updates.
 
 ### 3. Extend functionality after the first iteration
 
