@@ -1,0 +1,42 @@
+# Copy to the GROMACS demo root, retaining its infra and experiment files.
+# Add Terraform output DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME =
+# azapi_resource.chat_model.name (see README); no model service is required.
+name: microsoft-discovery-gromacs-sample
+requiredVersions:
+  azd: ">=1.35.0"
+infra:
+  provider: terraform
+  path: ./infra
+discovery:
+  schemaVersion: "1.0"
+  workspaceResourceId: ${DISCOVERY_WORKSPACE_ID}
+  projectResourceId: ${DISCOVERY_PROJECT_ID}
+  nodePoolResourceId: ${DISCOVERY_NODE_POOL_ID}
+services:
+  simulation:
+    host: discovery.tool
+    project: ./experiments/lysozyme-water
+    language: docker
+    docker:
+      target: discovery
+      registry: ${AZURE_CONTAINER_REGISTRY_ENDPOINT}
+    config:
+      definition: ./tool.cpu.yaml
+  researcher:
+    host: discovery.agent
+    project: ./experiments/lysozyme-water
+    uses: [simulation]
+    config:
+      model:
+        deploymentName: ${DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME}
+      bindings:
+        gromacsToolId:
+          service: simulation
+          output: resourceId
+# Core azd's default up DAG may package concurrently with provisioning.
+# Use its built-in sequential workflow to require Terraform before the build.
+workflows:
+  up:
+    steps:
+      - azd: provision
+      - azd: deploy --all

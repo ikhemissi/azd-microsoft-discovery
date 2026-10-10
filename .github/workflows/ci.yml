@@ -1,0 +1,87 @@
+name: Linux quality checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    env:
+      AZD_COLLECT_TELEMETRY: "no"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.11.4
+          args: --timeout 10m
+      - name: Offline tests with race detection
+        run: |
+          mkdir -p coverage
+          go test -race -count=1 -coverprofile=coverage/offline.out ./...
+          go tool cover -func=coverage/offline.out | tee coverage/summary.txt
+      - name: Go modernization
+        run: |
+          go fix -diff ./... > coverage/go-fix.diff
+          test ! -s coverage/go-fix.diff
+      - name: Upload coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: offline-coverage
+          path: coverage/
+
+  native:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AZD_COLLECT_TELEMETRY: "no"
+      AZD_DISCOVERY_NATIVE_TESTS: "1"
+      AZD_DISCOVERY_CONTAINER_TESTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install minimum azd host and Podman
+        run: |
+          echo "AZD_CONFIG_DIR=$RUNNER_TEMP/discovery-azd" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y podman
+          curl --fail --location --retry 3 \
+            https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.35.0/azd-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/azd.tar.gz"
+          mkdir -p "$RUNNER_TEMP/azd-minimum"
+          tar -xzf "$RUNNER_TEMP/azd.tar.gz" -C "$RUNNER_TEMP/azd-minimum"
+          sudo install "$RUNNER_TEMP/azd-minimum/azd-linux-amd64" /usr/local/bin/azd
+          azd version
+          podman --version
+      - name: Build and install fresh bundle
+        run: |
+          azd extension install microsoft.azd.extensions --version 0.13.0
+          azd x build
+          azd x pack --bundle --output ./artifacts
+          azd extension install ./artifacts/ikhemissi-azd-discovery_0.1.0-preview.1.zip --force
+          azd discovery version
+      - name: Native offline smoke tests
+        run: |
+          go test -count=1 -v \
+            -run 'Test(NativeContainerPackage|NativeReferencePackage|(Native|Standalone)ReadOnlyCommands)' .

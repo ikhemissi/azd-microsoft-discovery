@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Discovery Extension Configuration",
+  "$ref": "#/$defs/project",
+  "$defs": {
+    "resourceId": { "type": "string", "minLength": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "workspaceResourceId", "projectResourceId"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "workspaceResourceId": { "$ref": "#/$defs/resourceId" },
+        "projectResourceId": { "$ref": "#/$defs/resourceId" },
+        "nodePoolResourceId": { "$ref": "#/$defs/resourceId" },
+        "operationTimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 7200, "default": 1800 }
+      }
+    },
+    "image": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "const": "build", "default": "build", "description": "Default image mode. Use core language: docker and an explicit docker.registry and service project." },
+            "infraNode": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "reference"],
+          "properties": {
+            "mode": { "const": "reference" },
+            "infraNode": { "type": "string", "minLength": 1 },
+            "reference": { "type": "string", "pattern": "^(?:[^\\s]+@sha256:[0-9a-f]{64}|\\$\\{[A-Za-z_][A-Za-z0-9_]*\\})$", "description": "Immutable fully qualified OCI SHA-256 reference; no native build or push. Environment references must resolve by Publish/Deploy." }
+          }
+        }
+      ]
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "container", "default": "container", "description": "Discovery integration type, distinct from core language: docker. Only container tools are implemented in this iteration." },
+        "definition": { "type": "string", "minLength": 1, "default": "tool.yaml" },
+        "image": { "$ref": "#/$defs/image", "default": { "mode": "build" } }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "output"],
+      "properties": {
+        "service": { "type": "string", "minLength": 1 },
+        "output": { "const": "resourceId" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "definition": { "type": "string", "minLength": 1, "default": "agent.yaml" },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deploymentName"],
+          "properties": {
+            "deploymentName": { "type": "string", "minLength": 1, "description": "Existing Terraform-owned workspace chat-model deployment name. Overrides model.id in the deployment copy; environment outputs may remain unresolved during Package." }
+          }
+        },
+        "bindings": {
+          "type": "object",
+          "default": {},
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9_-]*$" },
+          "additionalProperties": { "$ref": "#/$defs/binding" }
+        }
+      }
+    },
+    "service": {
+      "anyOf": [
+        { "$ref": "#/$defs/tool" },
+        { "$ref": "#/$defs/agent" }
+      ]
+    }
+  }
+}
