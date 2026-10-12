@@ -10,7 +10,7 @@ import (
 
 var (
 	// Populated at build time
-	Version   = "0.1.0-preview.1"
+	Version   = "0.1.0"
 	Commit    = "none"
 	BuildDate = "unknown"
 )

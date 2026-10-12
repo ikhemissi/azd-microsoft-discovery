@@ -3,7 +3,7 @@
 Build container images, register Microsoft Discovery tools, and deploy prompt
 agents through the Azure Developer CLI (`azd`).
 
-**Community preview:** this is not an official Microsoft-supported extension.
+**Community-maintained:** this is not an official Microsoft-supported extension.
 Local packaging and offline lifecycle tests pass; live Azure deployment has not
 yet been verified.
 
@@ -49,7 +49,7 @@ Choose a published version from [GitHub Releases](https://github.com/ikhemissi/a
 ```sh
 # Replace with an existing published version; the workflow does not create
 # a release until a matching version tag is pushed.
-VERSION=0.1.0-preview.1
+VERSION=0.1.0
 azd extension install \
   "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
 azd discovery version
@@ -81,7 +81,7 @@ export AZD_COLLECT_TELEMETRY=no
 azd extension install microsoft.azd.extensions --version 0.13.0
 azd x build
 azd x pack --bundle --output ./artifacts
-azd extension install ./artifacts/ikhemissi-azd-discovery_0.1.0-preview.1.zip --force
+azd extension install ./artifacts/ikhemissi-azd-discovery_0.1.0.zip --force
 azd discovery version
 ```
 
@@ -450,7 +450,7 @@ To prepare a release:
 ```sh
 # First set the same new version in extension.yaml and
 # internal/cmd/version.go, then commit those changes.
-VERSION=0.1.0-preview.1
+VERSION=0.1.0
 go test -count=1 -run '^TestManifestVersionMatchesBinaryDefault$' .
 git tag -a "v${VERSION}" -m "Release ${VERSION}"
 git push origin main "v${VERSION}"
@@ -499,9 +499,9 @@ require explicit authorization; CI remains Linux-only.
 | Exercise redeployment and recovery | Verify unchanged agent reconciliation, interrupted operations, failed exports, and corrected failures against the live service |
 
 Resolve any endpoint, authentication, API-contract, or Podman-publication
-differences exposed by these tests before calling the preview cloud-verified.
+differences exposed by these tests before calling the release cloud-verified.
 
-### 2. Publish a usable preview
+### 2. Publish and validate releases
 
 - Release automation is implemented; publish the first versioned bundle and
   checksum by pushing a matching tag after committing these changes.

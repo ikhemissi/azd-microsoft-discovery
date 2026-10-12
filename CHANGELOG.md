@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.1.0-preview.1 (unreleased)
+## 0.1.0 (2026-10-12)
 
 - Add Linux-only GitHub Release publishing on matching version tags. Reuse the
   CI-tested bundle, validate version/platform/artifact checksums, publish bundle
-  and SHA256SUMS, and mark preview versions as prereleases.
+  and SHA256SUMS.
 - Upload tested extension bundles as development Actions artifacts; document
   release URL installation without local build tooling.
 - Verify optional agent descriptions at the Foundry latest-version readback

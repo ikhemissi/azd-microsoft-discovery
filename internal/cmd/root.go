@@ -14,7 +14,7 @@ func NewRootCommand() *cobra.Command {
 		Use:     "discovery <command> [options]",
 		Version: Version,
 		Short:   "Build and deploy Microsoft Discovery tools and prompt agents",
-		Long:    "Community preview for Microsoft Discovery with native tool/agent deployment and local plan/doctor checks. Knowledge bases and live Azure readiness diagnostics are not implemented.",
+		Long:    "Community extension for Microsoft Discovery with native tool/agent deployment and local plan/doctor checks. Knowledge bases and live Azure readiness diagnostics are not implemented.",
 	})
 
 	rootCmd.SilenceUsage = true
