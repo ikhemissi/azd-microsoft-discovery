@@ -1,0 +1,18 @@
+name: discovery-knowledgebase
+
+discovery:
+  schemaVersion: "1.0"
+  workspaceResourceId: ${DISCOVERY_WORKSPACE_ID}
+  projectResourceId: ${DISCOVERY_PROJECT_ID}
+
+services:
+  literature:
+    host: discovery.knowledgebase
+    config:
+      name: research-papers
+      bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
+      description: Scientific papers and simulation manuals.
+      copilotInstruction: Ground answers in these documents and cite sources.
+      sources:
+        - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+      autoindex: true

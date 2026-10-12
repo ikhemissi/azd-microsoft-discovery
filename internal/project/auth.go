@@ -41,6 +41,10 @@ func newTokenProvider(ctx context.Context, client *azdext.AzdClient) (*azdext.To
 	if err != nil {
 		return nil, err
 	}
+	return tokenProviderForEnvironment(ctx, client, environment)
+}
+
+func tokenProviderForEnvironment(ctx context.Context, client *azdext.AzdClient, environment string) (*azdext.TokenProvider, error) {
 	values, err := client.Environment().GetValues(ctx, &azdext.GetEnvironmentRequest{Name: environment})
 	if err != nil {
 		return nil, fmt.Errorf("read subscription selection for azd environment %q: %w", environment, err)
@@ -56,6 +60,14 @@ func newTokenProvider(ctx context.Context, client *azdext.AzdClient) (*azdext.To
 	if err != nil {
 		return nil, fmt.Errorf("azd environment %q must select a valid AZURE_SUBSCRIPTION_ID; use azd env set AZURE_SUBSCRIPTION_ID <subscription-id> --environment %q: %w",
 			environment, environment, err)
+	}
+	return tokenProviderForSubscription(ctx, client, subscription)
+}
+
+func tokenProviderForSubscription(ctx context.Context, client *azdext.AzdClient, subscription string) (*azdext.TokenProvider, error) {
+	subscription, err := validatedID(subscription)
+	if err != nil {
+		return nil, fmt.Errorf("credential subscription: %w", err)
 	}
 	response, err := client.Account().LookupTenant(ctx, &azdext.LookupTenantRequest{SubscriptionId: subscription})
 	if err != nil {

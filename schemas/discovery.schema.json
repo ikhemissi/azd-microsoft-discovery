@@ -77,10 +77,34 @@
         }
       }
     },
+    "knowledgebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bookshelfName", "sources"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,24}$" },
+        "bookshelfName": { "type": "string", "minLength": 1 },
+        "subscriptionId": { "type": "string", "minLength": 1 },
+        "resourceGroup": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "default": "" },
+        "copilotInstruction": { "type": "string", "default": "" },
+        "autoindex": { "type": "boolean", "default": true },
+        "nodePoolResourceId": { "type": "string", "minLength": 1 },
+        "sources": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["storageAssetResourceId"],
+            "properties": { "storageAssetResourceId": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
     "service": {
       "anyOf": [
         { "$ref": "#/$defs/tool" },
-        { "$ref": "#/$defs/agent" }
+        { "$ref": "#/$defs/agent" },
+        { "$ref": "#/$defs/knowledgebase" }
       ]
     }
   }

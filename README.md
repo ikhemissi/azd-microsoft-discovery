@@ -1,7 +1,7 @@
 # Microsoft Discovery Community Extension for azd
 
 Build container images, register Microsoft Discovery tools, and deploy prompt
-agents with the Azure Developer CLI.
+agents and knowledge bases with the Azure Developer CLI.
 
 **Community-maintained, not officially supported by Microsoft.** Releases use
 normal `0.x` versions; configuration and behavior may change between releases.
@@ -10,6 +10,7 @@ normal `0.x` versions; configuration and behavior may change between releases.
 | --- | --- |
 | `discovery.tool` | Build/publish a container or reference an immutable image, then register the tool |
 | `discovery.agent` | Verify an existing model deployment, resolve tool bindings, and deploy the agent |
+| `discovery.knowledgebase` | Reconcile a KB on an existing Bookshelf and optionally index registered storage sources |
 
 ```text
 Terraform provision → container build/package → ACR publish
@@ -18,8 +19,8 @@ Terraform provision → container build/package → ACR publish
 
 Terraform owns infrastructure, identities, permissions, networking, and capacity.
 Core azd handles dependencies through `uses`; no postdeploy hook is required.
-Deployment does not invoke agents, run simulations, index data, grant roles, or
-scale compute.
+Deployment does not invoke agents, run simulations, grant roles, or scale compute.
+KB services index by default; set `autoindex: false` for configuration-only deployment.
 
 ## Install or update
 
@@ -159,6 +160,43 @@ researcher:
 - All resolved model/tool references are checked remotely. Missing or mismatched
   managed fields block deployment; an omitted optional description does not.
 
+### Knowledge bases
+
+**Unreleased:** KB support requires a [development bundle](CONTRIBUTING.md#build-and-install-a-development-bundle);
+the published `0.2.0` bundle does not include it.
+
+Add a service under `services` in your existing configuration, or use the
+[complete KB example](examples/knowledgebase/azure.yaml):
+
+```yaml
+literature:
+  host: discovery.knowledgebase
+  config:
+    name: research-papers
+    bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
+    sources:
+      - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+    autoindex: true
+```
+
+- Terraform owns the Bookshelf, storage-container/asset registrations, access,
+  and optional compute. Sources are **existing Discovery storage-asset ARM IDs**,
+  not local folders or Blob URLs; this extension does not upload/register them.
+- Bookshelf lookup defaults to selected `AZURE_SUBSCRIPTION_ID` and
+  `AZURE_RESOURCE_GROUP`. Override with `config.subscriptionId` / `resourceGroup`;
+  credentials use that subscription's tenant.
+- `name` defaults to the service name; use 1–24 alphanumeric/hyphen characters.
+  Optional `description` and `copilotInstruction` default to empty strings.
+- `autoindex` defaults to `true`: each fresh deployment indexes, even if the
+  definition is unchanged, so new storage content can be picked up.
+  Set `false` to reconcile only; then explicitly run `azd discovery index literature`.
+- Indexing uses the configured project and optional `config.nodePoolResourceId`,
+  falling back to `discovery.nodePoolResourceId`. If neither pool is configured,
+  omit it in the API request; do not infer/create/scale compute. Indexing can incur costs.
+- Manual indexing requires an existing KB whose definition matches configuration;
+  deploy definition changes first. Optional source identities are omitted.
+- GA KBs have no versions. **Agent KB attachment is not yet supported.**
+
 ## Commands and recovery
 
 | Command | Behavior |
@@ -167,6 +205,8 @@ researcher:
 | `azd package simulation` | Local build/package; no push or Azure deployment |
 | `azd deploy --all` | Build/package/publish and deploy in dependency order |
 | `azd deploy researcher` | Requires verified deployed dependencies; does not rebuild them |
+| `azd deploy literature` | Reconcile KB configuration; index unless `autoindex: false` |
+| `azd discovery index literature` | Verify an existing KB, start/resume indexing, and export the successful run |
 | `azd publish simulation` | Push to ACR only; still a cloud mutation |
 | `azd down` | IaC teardown; no custom application-deletion hook |
 
@@ -179,20 +219,29 @@ are `SERVICE_<NAME>_NAME` and `_VERSION`. Recovery records live under ignored
 correction of definitive failures. Ambiguous submissions remain blocked to
 avoid duplicate immutable versions.
 
+KB exports use `SERVICE_<NAME>_KNOWLEDGE_BASE_ID`, `_NAME`, `_BOOKSHELF_RESOURCE_ID`,
+`_INDEXING_STATUS`, and `_RUN_ID`. The KB ID is server-returned, empty when omitted;
+neither the ID nor run ID is an agent attachment version. Configuration-only
+deployments export observed indexing status, not an assertion of indexed readiness.
+Rerun the **same deploy/index command** to resume an acknowledged indexing operation
+or restore failed exports without another job. An ambiguous indexing POST is
+blocked pending inspection of remote operation history; do not delete its recovery
+record or blindly retry. A fresh command after completed work starts a new indexing run.
+
 **Diagnostic caveat:** azd 1.35.0 can repair environment metadata before extension
 startup and append text after failed JSON output. For strict local read-only
 diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
 
 ## Scope and limitations
 
-- Container tools and prompt agents only. KBs, indexing, uploads, MCP/OpenAPI
+- Container tools, prompt agents, and GA KBs. Agent KB attachment, uploads, MCP/OpenAPI
   lifecycles, remote builds, `imagePassthrough`, and `publish --to` are unsupported.
 - Build publication supports public-cloud ACR and single-image manifests, not
   multi-platform indexes. Immutable reference indexes are accepted.
 - Linux CI and local tests cover azd 1.35.0 and Podman 4.9.3. A working live
   deployment has been reported, but this is not comprehensive cloud, GPU,
   platform, permission, or recovery certification.
-- Discovery adapters use tool ARM API `2026-06-01` and agent workspace API
+- Discovery adapters use tool/KB API `2026-06-01` and agent workspace API
   `2026-02-01-preview`; the latter is an API version, not the extension's release status.
 
 For local builds, tests, release automation, and development artifacts, see
@@ -205,9 +254,7 @@ For local builds, tests, release automation, and development artifacts, see
 | Linux CI and automatic Releases | Working; versions, annotated tags, notes, bundles, and checksums are automated |
 | Broader live validation | Reference mode, Podman publication, redeployment, permissions, and recovery |
 | Newer azd compatibility | Test alongside the pinned minimum |
-| KB support | Resolve storage sources, GA attachment format, and optional identity behavior before implementation |
-| Later features | Explicit/automatic indexing, MCP/OpenAPI tools, uploads, remote diagnostics, GPU certification |
+| KB support | Lifecycle and recoverable indexing are offline-tested; live API/optional identity/compute behavior and GA agent attachment remain gates |
+| Later features | Friendly storage-source resolution, MCP/OpenAPI tools, uploads, remote diagnostics, GPU certification |
 
-KB infrastructure remains Terraform-owned. Future indexing is planned with an
-explicit command and `autoindex: true` by default; none of this is implemented
-yet. Cross-platform checks remain deferred; CI stays Linux-only.
+No live KB mutations or indexing have been performed. CI stays Linux-only.

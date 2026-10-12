@@ -40,7 +40,15 @@ func Load(ctx context.Context, client *azdext.AzdClient, environment string, pac
 	if err != nil {
 		return nil, errors.New("configuration contains unsupported values")
 	}
-	if environment != "" || strings.Contains(string(data), "${") {
+	needsScope := false
+	if services, ok := document["services"].(map[string]any); ok {
+		for _, raw := range services {
+			if service, ok := raw.(map[string]any); ok && service["host"] == KnowledgeBaseHost {
+				needsScope = true
+			}
+		}
+	}
+	if environment != "" || strings.Contains(string(data), "${") || needsScope {
 		response, err := client.Environment().GetValues(ctx, &azdext.GetEnvironmentRequest{Name: environment})
 		if err != nil {
 			return nil, fmt.Errorf("read azd environment: select an existing environment: %w", err)

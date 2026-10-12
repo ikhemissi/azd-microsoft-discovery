@@ -106,9 +106,16 @@ func parse(root string, document map[string]any, lookup Lookup, deferred bool) (
 			}
 			targets[target] = name
 		}
+		if kb := service.KnowledgeBase; kb != nil {
+			target := strings.ToLower(BookshelfResourceID(kb) + "/knowledgeBases/" + kb.Name)
+			if previous, exists := targets[target]; exists {
+				return nil, fmt.Errorf("services %q and %q manage the same KB", previous, name)
+			}
+			targets[target] = name
+		}
 	}
 	if count == 0 {
-		return nil, errors.New("no Discovery services declared; use discovery.tool or discovery.agent")
+		return nil, errors.New("no Discovery services declared; use discovery.tool, discovery.agent, or discovery.knowledgebase")
 	}
 	return project, nil
 }
@@ -161,6 +168,13 @@ func parseService(project *Project, name string, raw map[string]any, lookup Look
 		}
 	}
 	switch service.Host {
+	case KnowledgeBaseHost:
+		if raw["language"] != nil || raw["docker"] != nil {
+			return nil, errors.New("knowledge bases do not use language/docker build settings")
+		}
+		if err := parseKnowledgeBase(service, raw["config"], lookup, deferred); err != nil {
+			return nil, err
+		}
 	case ToolHost:
 		service.Tool = &Tool{}
 		if err := decodeMode("tool", raw["config"], lookup, service.Tool, deferred); err != nil {
@@ -359,6 +373,8 @@ func Outputs(host string) []string {
 		return []string{"resourceId", "image"}
 	case AgentHost:
 		return []string{"name", "version"}
+	case KnowledgeBaseHost:
+		return []string{"knowledgeBaseId", "name", "bookshelfResourceId", "indexingStatus", "runId"}
 	case BookshelfHost:
 		return []string{"resourceId", "knowledgeBaseId", "indexingStatus"}
 	default:
@@ -370,6 +386,7 @@ func Alias(service, output string) string {
 	words := map[string]string{
 		"resourceId":      "RESOURCE_ID",
 		"knowledgeBaseId": "KNOWLEDGE_BASE_ID", "indexingStatus": "INDEXING_STATUS",
+		"bookshelfResourceId": "BOOKSHELF_RESOURCE_ID", "runId": "RUN_ID",
 	}
 	suffix, ok := words[output]
 	if !ok {

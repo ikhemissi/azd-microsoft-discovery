@@ -1,9 +1,10 @@
 package config
 
 const (
-	ToolHost      = "discovery.tool"
-	AgentHost     = "discovery.agent"
-	BookshelfHost = "discovery.bookshelf"
+	ToolHost          = "discovery.tool"
+	AgentHost         = "discovery.agent"
+	KnowledgeBaseHost = "discovery.knowledgebase"
+	BookshelfHost     = "discovery.bookshelf"
 )
 
 type Project struct {
@@ -22,15 +23,32 @@ type Settings struct {
 }
 
 type Service struct {
-	Name       string
-	Host       string
-	Project    string
-	Uses       []string
-	Tool       *Tool
-	Agent      *Agent
-	Bookshelf  *Bookshelf
-	Definition map[string]any
-	Docker     map[string]any
+	Name          string
+	Host          string
+	Project       string
+	Uses          []string
+	Tool          *Tool
+	Agent         *Agent
+	KnowledgeBase *KnowledgeBase
+	Bookshelf     *Bookshelf
+	Definition    map[string]any
+	Docker        map[string]any
+}
+
+type KnowledgeBase struct {
+	Name               string                `json:"name"`
+	BookshelfName      string                `json:"bookshelfName"`
+	SubscriptionID     string                `json:"subscriptionId"`
+	ResourceGroup      string                `json:"resourceGroup"`
+	Description        string                `json:"description"`
+	CopilotInstruction string                `json:"copilotInstruction"`
+	Sources            []KnowledgeBaseSource `json:"sources"`
+	Autoindex          *bool                 `json:"autoindex"`
+	NodePoolResourceID string                `json:"nodePoolResourceId"`
+}
+
+type KnowledgeBaseSource struct {
+	StorageAssetResourceID string `json:"storageAssetResourceId"`
 }
 
 type Image struct {

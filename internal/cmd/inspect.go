@@ -82,7 +82,7 @@ func newInspectCommand(name string, extension *azdext.ExtensionContext, load pro
 				result.Checks = []check{
 					{Name: "configuration", State: "passed", Message: "Local schemas, paths, definitions, supported scope checks, and binding declarations validated."},
 					{Name: "azureReadiness", State: "notChecked", Message: "Authentication, remote resources, RBAC, registry access, networking, and indexing readiness are not checked in this iteration."},
-					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent lifecycle providers are registered and offline-tested. Live ACR/Discovery deployment remains unverified; KB support is deferred."},
+					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent/KB lifecycle providers are registered and offline-tested. KB indexing and omitted source identity behavior require live validation; agent KB attachment is not implemented."},
 				}
 				result.Services = summarize(project)
 			}
@@ -136,6 +136,11 @@ func summarize(project *config.Project) []servicePlan {
 				item.UnresolvedBindings = append(item.UnresolvedBindings, binding.Service+"."+binding.Output)
 			}
 			slices.Sort(item.UnresolvedBindings)
+		case config.KnowledgeBaseHost:
+			item.Ownership, item.Intent = "managedApplication", "reconcileKnowledgeBase"
+			if service.KnowledgeBase.Autoindex == nil || *service.KnowledgeBase.Autoindex {
+				item.Intent = "reconcileAndIndexKnowledgeBase"
+			}
 		}
 		result = append(result, item)
 	}

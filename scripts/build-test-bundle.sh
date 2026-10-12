@@ -13,7 +13,7 @@ azd extension install "./artifacts/$bundle" --force
 azd discovery version
 AZD_DISCOVERY_CONTAINER_TESTS=1 AZD_DISCOVERY_NATIVE_TESTS=1 \
   go test -count=1 -v \
-    -run 'Test(NativeContainerPackage|NativeReferencePackage|(Native|Standalone)ReadOnlyCommands)' .
+    -run 'Test(NativeContainerPackage|NativeReferencePackage|NativeKnowledgeBasePackage|(Native|Standalone)ReadOnlyCommands)' .
 DISCOVERY_RELEASE_BUNDLE="$PWD/artifacts/$bundle" \
   go test -count=1 -v -run '^TestLinuxReleaseBundle$' .
 (cd artifacts && sha256sum "$bundle" > SHA256SUMS && sha256sum --check SHA256SUMS)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -23,12 +22,13 @@ type Container interface {
 }
 
 type Dependencies struct {
-	Load        func(context.Context, bool) (*config.Project, error)
-	Container   Container
-	Cloud       func(context.Context) (*discovery.Client, error)
-	Digest      func(context.Context, string, string) (string, error)
-	Environment func(context.Context) (string, error)
-	Export      func(context.Context, string, string) error
+	Load                func(context.Context, bool) (*config.Project, error)
+	Container           Container
+	Cloud               func(context.Context) (*discovery.Client, error)
+	CloudInSubscription func(context.Context, string) (*discovery.Client, error)
+	Digest              func(context.Context, string, string) (string, error)
+	Environment         func(context.Context) (string, error)
+	Export              func(context.Context, string, string) error
 }
 
 type Provider struct {
@@ -52,22 +52,45 @@ func (c containerRPC) Publish(ctx context.Context, request *azdext.ContainerPubl
 	return c.client.Container().Publish(ctx, request)
 }
 
-func Register(host *azdext.ExtensionHost) {
-	client := host.Client()
+func NewWithClient(client *azdext.AzdClient, environment string) *Provider {
+	selected := func(ctx context.Context) (string, error) {
+		if environment != "" {
+			return environment, nil
+		}
+		return currentEnvironment(ctx, client)
+	}
+	credential := func(ctx context.Context) (*azdext.TokenProvider, error) {
+		name, err := selected(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return tokenProviderForEnvironment(ctx, client, name)
+	}
 	deps := Dependencies{
 		Load: func(ctx context.Context, packageOnly bool) (*config.Project, error) {
-			return config.Load(ctx, client, os.Getenv("AZD_ENVIRONMENT"), packageOnly)
+			name, err := selected(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return config.Load(ctx, client, name, packageOnly)
 		},
 		Container: containerRPC{client},
 		Cloud: func(ctx context.Context) (*discovery.Client, error) {
-			credential, err := newTokenProvider(ctx, client)
+			credential, err := credential(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return discovery.NewClient(credential), nil
+		},
+		CloudInSubscription: func(ctx context.Context, subscription string) (*discovery.Client, error) {
+			credential, err := tokenProviderForSubscription(ctx, client, subscription)
 			if err != nil {
 				return nil, err
 			}
 			return discovery.NewClient(credential), nil
 		},
 		Digest: func(ctx context.Context, image, imageHash string) (string, error) {
-			credential, err := newTokenProvider(ctx, client)
+			credential, err := credential(ctx)
 			if err != nil {
 				return "", err
 			}
@@ -77,18 +100,26 @@ func Register(host *azdext.ExtensionHost) {
 			}
 			return registry.Resolve(ctx, image)
 		},
-		Environment: func(ctx context.Context) (string, error) {
-			return currentEnvironment(ctx, client)
-		},
+		Environment: selected,
 		Export: func(ctx context.Context, key, value string) error {
-			_, err := client.Environment().SetValue(ctx, &azdext.SetEnvRequest{
-				EnvName: os.Getenv("AZD_ENVIRONMENT"), Key: key, Value: value,
+			environment, err := selected(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = client.Environment().SetValue(ctx, &azdext.SetEnvRequest{
+				EnvName: environment, Key: key, Value: value,
 			})
 			return err
 		},
 	}
-	for _, name := range []string{config.ToolHost, config.AgentHost} {
-		host.WithServiceTarget(name, func() azdext.ServiceTargetProvider { return New(deps) })
+	return New(deps)
+}
+
+func Register(host *azdext.ExtensionHost) {
+	for _, name := range []string{config.ToolHost, config.AgentHost, config.KnowledgeBaseHost} {
+		host.WithServiceTarget(name, func() azdext.ServiceTargetProvider {
+			return NewWithClient(host.Client(), "")
+		})
 	}
 }
 
@@ -141,11 +172,14 @@ func (p *Provider) GetTargetResource(ctx context.Context, subscription string, s
 			return nil, err
 		}
 	}
+	if service.KnowledgeBase != nil {
+		resourceID = config.BookshelfResourceID(service.KnowledgeBase)
+	}
 	id, err := arm.ParseResourceID(resourceID)
 	if err != nil {
 		return nil, err
 	}
-	if subscription != "" && !strings.EqualFold(subscription, id.SubscriptionID) {
+	if service.KnowledgeBase == nil && subscription != "" && !strings.EqualFold(subscription, id.SubscriptionID) {
 		return nil, errors.New("deployment subscription differs from configured Discovery scope")
 	}
 	return &azdext.TargetResource{
@@ -355,6 +389,8 @@ func sourceHash(service *config.Service) (string, error) {
 		settings = service.Tool
 	case config.AgentHost:
 		settings = service.Agent
+	case config.KnowledgeBaseHost:
+		settings = service.KnowledgeBase
 	}
 	return state.Hash(struct {
 		Host       string

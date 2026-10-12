@@ -82,6 +82,8 @@ claim or arbitrary percentage gate. Linux CI also validates:
 - Terraform-safe credential construction and fresh environment values.
 - Documentation examples and independently authored API fixtures.
 - Digest verification, strict agent readback, reconciliation, and recovery.
+- GA KB definition/index operation correlation, automatic/manual indexing,
+  subscription overrides, ambiguous submissions, and export restoration without duplicate jobs.
 - Commit-based version rules, annotated tags, stale-checkout guards, and draft recovery.
 
 Native offline tests build a scratch image without pulling a base image:
@@ -91,7 +93,7 @@ bash scripts/build-test-bundle.sh
 ```
 
 This builds/installs a fresh bundle in your isolated configuration, runs native
-container/reference/agent packaging and diagnostic tests, validates bundle
+container/reference/agent/KB packaging and diagnostic tests, validates bundle
 metadata, and writes `SHA256SUMS`. Fixture images are cleaned on failure too.
 No ACR publication, provisioning, agent invocation, or indexing is performed.
 
@@ -127,6 +129,10 @@ only the exact documented host exceptions; other mutations/output drift fail.
 - Cloud provisioning/publication/deployment requires explicit authorization.
   Agent invocation, simulations, indexing, uploads, role grants, and scaling
   require separate consideration; do not hide them in deployment tests.
+- KB deployments index by default. Offline tests must never submit actual jobs.
+  Bookshelves and storage registrations are GET-only prerequisites; source
+  identities are omitted rather than inferred. GA KBs have no versions; keep
+  agent attachment blocked until its released contract is verified.
 
 ## Conventional Commits and automatic releases
 

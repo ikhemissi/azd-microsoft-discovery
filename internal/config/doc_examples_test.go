@@ -31,13 +31,17 @@ func documentValues(name string) (string, bool) {
 		"AZURE_CONTAINER_REGISTRY_ENDPOINT":    "example.azurecr.io",
 		"DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME": "chat",
 		"DISCOVERY_TOOL_IMAGE_DIGEST":          "example.azurecr.io/tool@sha256:" + strings.Repeat("a", 64),
+		"DISCOVERY_BOOKSHELF_NAME":             "literature",
+		"DISCOVERY_PAPERS_ASSET_ID":            scope + "/storageContainers/data/storageAssets/papers",
+		"AZURE_SUBSCRIPTION_ID":                "00000000-0000-0000-0000-000000000001",
+		"AZURE_RESOURCE_GROUP":                 "demo",
 	}
 	value, exists := values[name]
 	return value, exists
 }
 
 func TestPublishedAzureYAMLExamples(t *testing.T) {
-	for _, name := range []string{"gromacs-build"} {
+	for _, name := range []string{"gromacs-build", "knowledgebase"} {
 		t.Run(name, func(t *testing.T) {
 			document, err := ReadDocument(filepath.Join("..", "..", "examples", name, "azure.yaml"))
 			if err != nil {
@@ -81,6 +85,8 @@ func TestREADMEYAMLExamples(t *testing.T) {
 			tool["config"] = settings
 		} else if agent, exists := snippet["researcher"]; exists {
 			services["researcher"] = agent
+		} else if kb, exists := snippet["literature"]; exists {
+			services["literature"] = kb
 		} else {
 			t.Fatal("unrecognized README YAML example; add validation for its shape")
 		}

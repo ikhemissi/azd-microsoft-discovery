@@ -158,10 +158,11 @@ func TestTerraformCloudAndDigestCredentialsAvoidDeploymentContext(t *testing.T) 
 	}
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
-	if backend.currentCalls != 0 || backend.deploymentCalls != 0 || len(backend.lookupRequests) != 6 {
+	if backend.currentCalls != 0 || backend.deploymentCalls != 0 || len(backend.lookupRequests) != 3*len(host.ServiceTargets()) {
 		t.Fatalf("unexpected credential RPC calls: current=%d deployment=%d lookups=%v",
 			backend.currentCalls, backend.deploymentCalls, backend.lookupRequests)
 	}
+
 	for _, name := range backend.valueRequests {
 		if name != "terraform" {
 			t.Fatalf("wrong effective environment: %s", name)
@@ -174,6 +175,39 @@ func TestTerraformCloudAndDigestCredentialsAvoidDeploymentContext(t *testing.T) 
 	}
 	if _, err := os.Stat(filepath.Join(root, "infra", "main.bicep")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Terraform credential fixture unexpectedly needs a Bicep file: %v", err)
+	}
+}
+
+func TestKnowledgeBaseScopeUsesOverrideTenantWithoutDeploymentContext(t *testing.T) {
+	t.Setenv("AZD_ENVIRONMENT", "terraform")
+	backend := &authRPC{
+		current: "default", subscriptions: map[string]string{"terraform": authSubscription},
+		tenants: map[string]string{authSubscription: authTenant, otherSubscription: otherTenant},
+	}
+	client, _ := authClient(t, backend)
+	provider := NewWithClient(client, "explicit-command-environment")
+	for _, subscription := range []string{authSubscription, otherSubscription} {
+		cloud, err := provider.deps.CloudInSubscription(t.Context(), subscription)
+		if err != nil {
+			t.Fatal(err)
+		}
+		credential, ok := cloud.Credential.(*azdext.TokenProvider)
+		if !ok || credential.TenantID() != backend.tenants[subscription] {
+			t.Fatal("Bookshelf credential did not use its subscription tenant")
+		}
+	}
+	environment, err := provider.deps.Environment(t.Context())
+	if err != nil || environment != "explicit-command-environment" {
+		t.Fatal("explicit CLI environment selection was lost")
+	}
+	if _, err := provider.deps.CloudInSubscription(t.Context(), "invalid"); err == nil {
+		t.Fatal("invalid Bookshelf scope constructed credentials")
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	if backend.deploymentCalls != 0 || backend.currentCalls != 0 || len(backend.valueRequests) != 0 ||
+		len(backend.lookupRequests) != 2 || backend.lookupRequests[1] != otherSubscription {
+		t.Fatal("Bookshelf override queried the default environment or Bicep context")
 	}
 }
 

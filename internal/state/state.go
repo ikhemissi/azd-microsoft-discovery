@@ -24,6 +24,13 @@ type Record struct {
 	Outputs       map[string]string `json:"outputs,omitempty"`
 	Operation     string            `json:"operation,omitempty"`
 	Phase         string            `json:"phase"`
+	Indexing      *Indexing         `json:"indexing,omitempty"`
+}
+
+type Indexing struct {
+	AcknowledgedRunID string `json:"acknowledgedRunId,omitempty"`
+	PreviousRunID     string `json:"previousRunId,omitempty"`
+	CompletedRunID    string `json:"completedRunId,omitempty"`
 }
 
 type Store struct{ Directory string }

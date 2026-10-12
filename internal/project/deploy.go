@@ -68,6 +68,9 @@ func (p *Provider) Deploy(ctx context.Context, sc *azdext.ServiceConfig, input *
 	if target != nil && !reflect.DeepEqual(target.Metadata, expected.Metadata) {
 		return nil, errors.New("Discovery target changed since resolution; rerun deployment")
 	}
+	if service.KnowledgeBase != nil {
+		return p.runKnowledgeBase(ctx, project, service, false, progress)
+	}
 	client, err := p.deps.Cloud(ctx)
 	if err != nil {
 		return nil, err

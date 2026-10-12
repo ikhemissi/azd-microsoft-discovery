@@ -49,5 +49,9 @@ func TestMetadataSurvivesSDKCacheRoundtrip(t *testing.T) {
 		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{"knowledgeBases": []any{}}); err == nil {
 			t.Fatal("metadata advertises deferred KB attachments")
 		}
+		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{
+			"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${ASSET}"}}}); err != nil {
+			t.Fatalf("KB metadata/default inputs did not survive caching: %v", err)
+		}
 	}
 }

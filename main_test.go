@@ -47,7 +47,7 @@ func TestManifestAgainstPinnedSDKSchema(t *testing.T) {
 			t.Fatal("manifest advertises an unimplemented capability")
 		}
 	}
-	if providers, ok := document["providers"].([]any); !ok || len(providers) != 2 {
-		t.Fatal("manifest must register only tool and agent targets")
+	if providers, ok := document["providers"].([]any); !ok || len(providers) != 3 {
+		t.Fatal("manifest must register tool, agent, and knowledge-base targets")
 	}
 }

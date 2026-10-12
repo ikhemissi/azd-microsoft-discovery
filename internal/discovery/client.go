@@ -27,6 +27,7 @@ type Client struct {
 	Credential        azcore.TokenCredential
 	HTTP              *http.Client
 	WorkspaceEndpoint string
+	bookshelfEndpoint string
 	Sleep             func(context.Context, time.Duration) error
 	Progress          func(string)
 }
@@ -39,6 +40,7 @@ type Resource struct {
 		ProvisioningState string         `json:"provisioningState"`
 		Version           string         `json:"version"`
 		Definition        map[string]any `json:"definitionContent"`
+		BookshelfURI      string         `json:"bookshelfUri"`
 	} `json:"properties"`
 }
 
@@ -110,7 +112,10 @@ func (c *Client) ValidateURL(value string) (*url.URL, error) {
 	}
 	arm, _ := url.Parse(ARMEndpoint)
 	workspace, err := url.Parse(c.WorkspaceEndpoint)
-	if u.Host != arm.Host && (err != nil || workspace == nil || workspace.Host == "" || u.Host != workspace.Host) {
+	bookshelf, bookshelfErr := url.Parse(c.bookshelfEndpoint)
+	if u.Host != arm.Host &&
+		(err != nil || workspace == nil || workspace.Host == "" || u.Host != workspace.Host) &&
+		(bookshelfErr != nil || bookshelf == nil || bookshelf.Host == "" || u.Host != bookshelf.Host) {
 		return nil, errors.New("Discovery request/operation URL is not a verified destination")
 	}
 	return u, nil
@@ -271,7 +276,10 @@ func (c *Client) Poll(ctx context.Context, address string) error {
 		if err := json.Unmarshal(response.Body, &operation); err != nil {
 			return errors.New("invalid Discovery operation response")
 		}
-		done, err := Terminal(operation.Status)
+		done := false
+		if operation.Status != "NotStarted" {
+			done, err = Terminal(operation.Status)
+		}
 		if err != nil || done {
 			return err
 		}
