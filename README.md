@@ -1,116 +1,58 @@
 # Microsoft Discovery Community Extension for azd
 
 Build container images, register Microsoft Discovery tools, and deploy prompt
-agents through the Azure Developer CLI (`azd`).
+agents with the Azure Developer CLI.
 
-**Community-maintained:** this is not an official Microsoft-supported extension.
-Local packaging and offline lifecycle tests pass; live Azure deployment has not
-yet been verified.
+**Community-maintained, not officially supported by Microsoft.** Releases use
+normal `0.x` versions; configuration and behavior may change between releases.
 
-## At a glance
-
-| Service target | Role | Infrastructure ownership |
-| --- | --- | --- |
-| `discovery.tool` | Build and publish a container, or use an existing immutable image; register the tool | The extension manages tool registration |
-| `discovery.agent` | Verify the model deployment, resolve tool bindings, and deploy a prompt agent | The extension manages the agent |
-
-The extension has two service targets: **tools and agents**. Agents select an
-existing Terraform-owned model deployment by name.
-
-The intended flow is:
+| Service | Purpose |
+| --- | --- |
+| `discovery.tool` | Build/publish a container or reference an immutable image, then register the tool |
+| `discovery.agent` | Verify an existing model deployment, resolve tool bindings, and deploy the agent |
 
 ```text
 Terraform provision → container build/package → ACR publish
                     → tool registration → agent deployment
 ```
 
-- Core azd handles service ordering through `uses`.
-- No global postdeploy hook, custom scheduler, or Docker/az CLI wrapper is needed.
-- Terraform owns infrastructure, identities, RBAC, networking, capacity, and teardown.
-- Deployment does not invoke agents, run simulations, upload documents, index
-  knowledge bases, grant roles, or scale compute.
+Terraform owns infrastructure, identities, permissions, networking, and capacity.
+Core azd handles dependencies through `uses`; no postdeploy hook is required.
+Deployment does not invoke agents, run simulations, index data, grant roles, or
+scale compute.
 
-## Requirements and installation
+## Install or update
 
-| Requirement | Version or purpose |
-| --- | --- |
-| azd | `>=1.35.0`; SDK and compatibility tests are pinned to `1.35.0` |
-| Container runtime | Docker or working local Podman for build mode |
-| Terraform | For the demo's infrastructure provisioning |
-| Azure permissions | Provision deployment access and Discovery image access through IaC |
+Prebuilt release bundles support **Linux amd64**. You need **azd >=1.35.0**,
+but not Go, Node, Rust, developer tooling, or a clone of this repository.
 
-### Install a published release
-
-GitHub Release bundles support **Linux amd64**. Users do not need Go, a clone of
-this repository, or extension developer tooling to install them.
-
-Choose a published version from [GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases):
+Choose a version from [GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases):
 
 ```sh
-# Select an existing published version.
-VERSION=0.1.0
+VERSION=0.2.0
 azd extension install \
   "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
 azd discovery version
 ```
 
-- Upgrade by installing the bundle URL for a newer version. Bundle installations
-  do not track a registry for automatic `azd extension update`.
-- Use `--force` only when deliberately reinstalling or replacing an installed build.
-- Install into the same `AZD_CONFIG_DIR` used for your application.
-- Each release includes `SHA256SUMS`. A checksum detects corruption but is not
-  a publisher signature; download only from a trusted repository.
+- **Update:** install a newer version's bundle URL. Bundle installs do not use
+  `azd extension update` because they do not track an extension registry.
+- **Reinstall:** add `--force` when deliberately replacing an installed build.
+- Use the same `AZD_CONFIG_DIR` for installation and your application commands.
+- Each release includes `SHA256SUMS`; download only from the trusted repository.
+  Checksums detect corruption, not publisher identity.
 
-Authentication stays with azd. For both Discovery requests and ACR digest
-verification, the extension reads `AZURE_SUBSCRIPTION_ID` from the effective azd
-environment and resolves its tenant through the public account API. It validates
-the IDs and supplies the tenant explicitly to the SDK token provider, without
-deployment-context lookup or Bicep compilation. No separate tenant setting is
-needed; a missing or invalid subscription selection blocks credential creation.
+## Quick start: GROMACS demo
 
-### Build and install locally
+Use the [complete build-mode configuration](examples/gromacs-build/azure.yaml)
+with [microsoft-discovery-gromacs-sample](https://github.com/ikhemissi/microsoft-discovery-gromacs-sample):
 
-Developers also need Go `>=1.26.4` and `microsoft.azd.extensions` `0.13.0`.
-From this extension's repository root:
-
-```sh
-export AZD_CONFIG_DIR=/absolute/path/to/isolated-azd-config
-export AZD_COLLECT_TELEMETRY=no
-
-azd extension install microsoft.azd.extensions --version 0.13.0
-azd x build
-azd x pack --bundle --output ./artifacts
-azd extension install ./artifacts/ikhemissi-azd-discovery_0.1.0.zip --force
-azd discovery version
-```
-
-Use an **isolated azd configuration** for development. Do not overwrite your
-normal extension installation or container credentials.
-
-> Install the bundle after building. On this tooling version, `azd x build`
-> alone can retain stale provider metadata and cause an “unsupported host” error.
-> A custom or official extension-registry listing is not required for release
-> URL installation.
-
-## Set up the GROMACS demo
-
-Use the [complete Terraform + build-mode example](examples/gromacs-build/azure.yaml)
-with [ikhemissi/microsoft-discovery-gromacs-sample](https://github.com/ikhemissi/microsoft-discovery-gromacs-sample).
-
-1. Copy the example to the demo's root as `azure.yaml`.
-2. Keep the demo's `infra/` and `experiments/lysozyme-water/` files.
-3. Remove the old Python postdeploy hook and use the example's native services.
-4. Add the model-name Terraform output below before provisioning.
-5. Remove `displayName` from the demo's agent manifest. This authoring label has
-   no verified request adapter and is rejected; keep `name`, description, and prompts.
-
-| Provisioning output | Used for |
-| --- | --- |
-| `DISCOVERY_WORKSPACE_ID` | Workspace ARM ID |
-| `DISCOVERY_PROJECT_ID` | Project ARM ID |
-| `DISCOVERY_NODE_POOL_ID` | Tool compute prerequisite |
-| `AZURE_CONTAINER_REGISTRY_ENDPOINT` | Explicit tool publication registry |
-| `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` | Agent model selection; add this output |
+1. Copy the example to the demo root as `azure.yaml`; retain its infrastructure
+   and experiment files.
+2. Remove the old Python deployment hook. Keep the example's sequential
+   `workflows.up`: provision first, then `deploy --all`.
+3. Remove the unsupported `displayName` field from the agent manifest.
+4. Add this model-name output to the demo's Terraform configuration:
 
 ```hcl
 output "DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME" {
@@ -119,65 +61,66 @@ output "DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME" {
 }
 ```
 
-The inspected demo baseline is `9d811fc54ecc358f7ab2e161ddb323e0f696b4af`.
-The demo repository itself has not been modified.
+The example also uses Terraform outputs for the workspace, project, node pool,
+and ACR endpoint. The model remains Terraform-owned; the extension does not
+create model deployments.
 
-**Provision before building:** the example's sequential `workflows.up` runs
-`provision`, then `deploy --all`. Core azd 1.35.0's default up workflow can
-package concurrently with provisioning, so retain this override.
+**Review and authorize Azure costs, capacity, and access before running:**
+
+```sh
+cd /path/to/microsoft-discovery-gromacs-sample
+azd auth login
+azd env new discovery-demo
+azd env set AZURE_SUBSCRIPTION_ID <authorized-subscription-id>
+azd env set AZURE_LOCATION <authorized-discovery-region>
+
+# If using Podman instead of Docker:
+export AZD_CONTAINER_RUNTIME=podman
+
+azd provision --environment discovery-demo
+azd deploy --all --environment discovery-demo
+```
+
+Alternatively, use `azd up` with the example's sequential workflow—do not run both
+alternatives unintentionally. Build mode needs a working Docker/Podman runtime.
+Authentication uses azd and the selected subscription's tenant; no separate
+tenant configuration or Bicep infrastructure is required.
 
 ## Configuration
 
-### Project settings
+Full validation rules are in the [configuration schema](schemas/discovery.schema.json).
+`${VARIABLE}` references use the azd environment before process variables.
+Build/package defer missing provisioning outputs; Publish/Deploy require them.
 
-These settings belong under the top-level `discovery` block.
+### Application scope
 
-| Setting | Requirement |
+| Top-level `discovery` setting | Requirement |
 | --- | --- |
-| `schemaVersion` | Required; `"1.0"` |
-| `workspaceResourceId` | Required; workspace ARM ID |
-| `projectResourceId` | Required; project ARM ID within that workspace |
-| `nodePoolResourceId` | Required when a tool is declared |
+| `schemaVersion` | `"1.0"` |
+| `workspaceResourceId` | Workspace ARM ID |
+| `projectResourceId` | Project ARM ID within that workspace |
+| `nodePoolResourceId` | Required for tools |
 | `operationTimeoutSeconds` | Optional; default `1800`, range `1–7200` |
 
-Provisioning outputs can be referenced with `${VARIABLE}`. Build/package defer
-missing infrastructure outputs; Publish/Deploy require them to resolve.
-Configuration and environment values are refreshed at lifecycle boundaries,
-with azd environment values taking precedence over process variables.
+### Tools
 
-### Container tools
-
-Core azd settings select the build framework; extension settings describe the
-Discovery integration.
-
-| Setting | Default / behavior |
+| Setting | Default or requirement |
 | --- | --- |
-| `project` | Required for build mode; use `.` for the application root |
-| `language` | Set to `docker` for build mode; omit for reference mode |
-| `docker.path` | `./Dockerfile`, relative to the service project |
-| `docker.context` | `.`, relative to the service project |
-| `docker.target` | Optional build stage; the demo uses `discovery` |
-| `docker.platform` | Core default `linux/amd64` |
-| `docker.registry` | Required for build mode; explicit public-cloud ACR hostname |
-| `docker.image` / `docker.tag` | Optional; core azd owns image naming and tagging |
-| `config.type` | `container`; MCP and OpenAPI lifecycles are not implemented |
-| `config.definition` | `tool.yaml`, relative to the service project; the demo overrides it with `tool.cpu.yaml` |
-| `config.image.mode` | `build`; alternatively, `reference` |
-| `config.image.infraNode` | Inferred only when exactly one eligible named image entry exists |
-| `config.image.reference` | Required in reference mode; fully qualified OCI SHA-256 digest without a tag |
+| `project` | Required in build mode; use `.` for the root |
+| `language` | `docker` in build mode; omit in reference mode |
+| `docker.registry` | Explicit public-cloud ACR hostname, not an HTTPS URL |
+| `docker.path` / `docker.context` | `./Dockerfile` / `.`, relative to the service project |
+| `docker.target` / `docker.platform` | Optional stage / core default `linux/amd64` |
+| `config.type` | `container` |
+| `config.definition` | `tool.yaml`, relative to the service project |
+| `config.image.mode` | `build` or `reference`; default `build` |
+| `config.image.infraNode` | Inferred for exactly one eligible named image entry; otherwise required |
+| `config.image.reference` | Required in reference mode; OCI SHA-256 digest without a tag |
 
-**What is `infraNode`?** It selects the named `infra` entry in the tool
-definition whose `image.acr` is replaced. Code environments refer to that name
-through `infra_node`. It is **not** an Azure node pool. If multiple eligible
-entries exist, select one explicitly.
-
-| Image mode | Build/push behavior | Registered image |
-| --- | --- | --- |
-| `build` | Native azd build, package, and ACR publication | Verified immutable digest |
-| `reference` | No build, tag, login, push, or registry lookup | Exact supplied digest |
-
-To use an existing image, keep the service project and omit `language` and
-`docker`. Use this configuration:
+`infraNode` selects the tool definition's `infra[].image.acr` entry—not an Azure
+node pool. Build mode publishes and verifies an immutable digest before
+registration. Reference mode preserves the supplied digest without build/push
+or registry lookup. Omit `language` and `docker` in reference mode:
 
 ```yaml
 config:
@@ -188,22 +131,10 @@ config:
     reference: ${DISCOVERY_TOOL_IMAGE_DIGEST}
 ```
 
-Build-mode boundaries:
+There is no assumed Discovery registry. If `AZURE_CONTAINER_REGISTRY_ENDPOINT`
+is set, it must agree with `docker.registry` because core azd prioritizes it.
 
-- Use a registry hostname such as `example.azurecr.io`, not an HTTPS URL.
-- Discovery has no verified default publication registry. The registry output
-  above is a demo convention.
-- Core prioritizes `AZURE_CONTAINER_REGISTRY_ENDPOINT` over `docker.registry`;
-  conflicting values are rejected.
-- `remoteBuild` and `imagePassthrough` are not supported. Existing images use
-  reference mode instead.
-- `azd publish --to` is rejected because the pinned Publish RPC cannot forward it.
-- Build publication supports public-cloud ACR only, not sovereign endpoints or
-  external registries.
-- Build-produced multi-platform indexes are rejected. Immutable reference
-  indexes are accepted; Discovery's access to the image remains your responsibility.
-
-### Agents and model selection
+### Agents
 
 ```yaml
 researcher:
@@ -219,358 +150,64 @@ researcher:
         output: resourceId
 ```
 
-| Setting | Default / behavior |
+- The definition defaults to `agent.yaml`, relative to the service project.
+- Supply a **deployment name**, not a model ARM ID or catalog model name.
+  Without `config.model.deploymentName`, use a literal manifest `model.id`.
+- Bindings replace whole-field tool placeholders; declare their services in `uses`.
+  Resolution occurs during Deploy, not Package.
+- Source definitions, prompts, and runtime placeholders remain unchanged.
+- All resolved model/tool references are checked remotely. Missing or mismatched
+  managed fields block deployment; an omitted optional description does not.
+
+## Commands and recovery
+
+| Command | Behavior |
 | --- | --- |
-| `config.definition` | `agent.yaml`, relative to the service project |
-| `config.model.deploymentName` | Optional; existing workspace model deployment name |
-| `config.bindings` | Empty object; maps whole-field placeholders to dependency outputs |
-| `uses` | Declare services referenced by bindings; core azd controls ordering |
+| `azd discovery plan` / `doctor` | Local configuration checks, not Azure readiness |
+| `azd package simulation` | Local build/package; no push or Azure deployment |
+| `azd deploy --all` | Build/package/publish and deploy in dependency order |
+| `azd deploy researcher` | Requires verified deployed dependencies; does not rebuild them |
+| `azd publish simulation` | Push to ACR only; still a cloud mutation |
+| `azd down` | IaC teardown; no custom application-deletion hook |
 
-- **Use the deployment name**, not a model ARM ID or necessarily the catalog model name.
-- A configured deployment name overrides `model.id` in the deployment copy only.
-  The manifest's model field may be omitted or contain an old placeholder.
-- Without that setting, the manifest must supply a literal deployment name in
-  `model.id`. Model service bindings are not supported.
-- Keep tool placeholders and prompts in the manifest. Instructions and runtime
-  placeholders are preserved; source definitions are never rewritten.
-- Missing, failed, or mismatched model/tool readback blocks agent submission.
-- Missing model deployments are not created; model provisioning stays in Terraform.
-- Unsupported fields, including `displayName`, fail preflight rather than being discarded.
-- KB attachments and Bookshelf service configuration are outside this iteration
-  and fail preflight.
-- Duplicate managed tool/agent targets are rejected. Agents may share the same
-  existing model deployment.
+Packaging may download dependencies. A separate package command can cause
+another build on a later deploy because caches are process-local.
 
-## Commands
+Verified tool outputs are `SERVICE_<NAME>_RESOURCE_ID` and `_IMAGE`; agent outputs
+are `SERVICE_<NAME>_NAME` and `_VERSION`. Recovery records live under ignored
+`.azure/<environment>/discovery/`. Reruns restore failed exports and allow
+correction of definitive failures. Ambiguous submissions remain blocked to
+avoid duplicate immutable versions.
 
-### Inspect and package locally
+**Diagnostic caveat:** azd 1.35.0 can repair environment metadata before extension
+startup and append text after failed JSON output. For strict local read-only
+diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
 
-| Command | Purpose |
-| --- | --- |
-| `azd discovery plan` | Inspect configuration and intended operations |
-| `azd discovery doctor` | Validate local configuration, not Azure readiness |
-| `azd package <service>` | Build and package locally; no image push or Azure deployment |
+## Scope and limitations
 
-From the demo directory:
+- Container tools and prompt agents only. KBs, indexing, uploads, MCP/OpenAPI
+  lifecycles, remote builds, `imagePassthrough`, and `publish --to` are unsupported.
+- Build publication supports public-cloud ACR and single-image manifests, not
+  multi-platform indexes. Immutable reference indexes are accepted.
+- Linux CI and local tests cover azd 1.35.0 and Podman 4.9.3. A working live
+  deployment has been reported, but this is not comprehensive cloud, GPU,
+  platform, permission, or recovery certification.
+- Discovery adapters use tool ARM API `2026-06-01` and agent workspace API
+  `2026-02-01-preview`; the latter is an API version, not the extension's release status.
 
-```sh
-azd env new discovery-local
-export AZD_CONTAINER_RUNTIME=podman
-export REGISTRY_AUTH_FILE=/absolute/path/to/isolated-container-auth.json
-
-azd package simulation --environment discovery-local --no-prompt
-azd package researcher --environment discovery-local --no-prompt
-```
-
-Packaging may download base images/packages and consume local resources.
-There is no separate extension build command for service containers.
-
-For strictly local diagnostics, build the standalone executable from the
-extension repository and supply the demo's required variables in your process
-environment:
-
-```sh
-go build -o bin/discovery .
-./bin/discovery plan --local --cwd /path/to/demo --output json
-./bin/discovery doctor --local --cwd /path/to/demo --output json
-
-# Native diagnostics for an existing azd environment:
-azd discovery doctor --cwd /path/to/demo --environment demo --output json
-```
-
-Diagnostics validate schemas, scopes, paths, definitions, bindings, and output
-aliases. Missing required environment values block them.
-`deploymentSupported: true` means providers exist—not that Azure is ready.
-
-> **Read-only caveat:** azd 1.35.0 can maintain `.env.lock`, repair
-> `AZURE_ENV_NAME`, create an empty environment `config.json`, or hydrate remote
-> state before the extension starts. Failed native JSON commands can also contain
-> a trailing human-readable error. Use standalone `--local` for strict read-only
-> behavior and parseable failures; it uses only process environment values.
-
-### Provision and deploy to Azure
-
-**Run these commands only after explicit authorization for provisioning, image
-publication, and application deployment.** Review Terraform capacity/costs and
-configure the authorized subscription, location, and IaC-owned access first.
-
-```sh
-cd /absolute/path/to/microsoft-discovery-gromacs-sample
-azd auth login
-azd env new discovery-demo
-azd env set AZURE_SUBSCRIPTION_ID <authorized-subscription-id>
-azd env set AZURE_LOCATION <authorized-discovery-region>
-export AZD_CONTAINER_RUNTIME=podman
-
-azd provision --environment discovery-demo
-azd deploy --all --environment discovery-demo
-
-# Alternative: the example's sequential workflow performs both stages.
-azd up --environment discovery-demo
-```
-
-Choose **either** the separate stages or `azd up`; do not run both unintentionally.
-
-| Command | Important behavior |
-| --- | --- |
-| `azd deploy --all` | Includes build/package/publish, tool registration, and agent deployment |
-| `azd deploy researcher` | Requires previously deployed, verified tool records; does not rebuild dependencies |
-| `azd publish simulation` | Pushes to ACR without registering the tool; still a cloud mutation |
-| `azd down` | IaC teardown owns its scope; no custom application-deletion hook |
-
-A separate `azd package --all` is optional for inspecting local artifacts.
-It can cause another build on a later deploy because lifecycle caches are
-process-local.
-
-## Verification, outputs, and recovery
-
-### Deployment checks
-
-- Reuse core build/package artifacts; use public container RPCs when absent.
-- Resolve the published tag to a manifest digest, hash its bytes, verify the
-  digest header, and fetch by digest again.
-- Compare the manifest's config digest with the packaged image identity to
-  guard against a concurrently overwritten tag.
-- Replace only the selected tool image, wait for readiness, and verify the
-  registered definition and version by GET.
-- Resolve agent bindings during Deploy—not Package—and verify the latest
-  agent version before exporting results.
-- Description is sent in `foundryDetails.description`. The
-  [Foundry response contract](https://github.com/Azure/azure-rest-api-specs/blob/2927d4ca395b75c4d4b879755dabfb32cb981687/specification/ai-foundry/data-plane/Foundry/src/agents/models.tsp)
-  returns it optionally at `foundryDetails.versions.latest.description`.
-  A returned mismatch fails verification; omission does not imply failure or
-  trigger another immutable version when all other managed fields match.
-  Name, model, instructions, tools, confirmation policies, extension flags,
-  provisioning state, and a nonempty version remain strictly verified.
-
-### Exported environment values
-
-| Service | Outputs |
-| --- | --- |
-| Tool | `SERVICE_<NAME>_RESOURCE_ID`, `SERVICE_<NAME>_IMAGE` |
-| Agent | `SERVICE_<NAME>_NAME`, `SERVICE_<NAME>_VERSION` |
-
-Recovery records use atomic writes and per-service locks under
-`.azure/<environment>/discovery/`. They do not copy definitions, prompts, tokens,
-or Terraform state.
-
-| Situation | Recovery behavior |
-| --- | --- |
-| Export failure | Rerun to restore exports without re-upserting unchanged resources |
-| Definitive rejection or failed/canceled operation | Record failure; allow a later corrected deployment |
-| Previously pending operation has failed | Report and record failure first; the following rerun can submit the correction |
-| Lost agent POST response | Reconcile with GET; never blindly retry |
-| Ambiguous submission or polling transport/access failure | Retain pending state and block unsafe duplicate submission |
-| Failed application resource | Allow repair; failed infrastructure prerequisites still block deployment |
-
-## Testing and quality checks
-
-CI is **Linux-only** and covers:
-
-- Formatting, build, vet, `unused`/`errorlint`, and Go modernization.
-- Uncached race tests with coverage.
-- Metadata SDK-cache roundtrips, provider/manifest matching, and environment refresh.
-- Documentation examples, independent readback fixtures, and failure/recovery regressions.
-- A fresh bundle installed on azd 1.35.0, followed by native offline smoke tests.
-
-Successful CI runs upload `discovery-bundle-linux-amd64`, containing the tested
-bundle and its checksum, with 30-day retention. Download a specific development
-build using authenticated GitHub CLI:
-
-```sh
-gh run download <run-id> --repo ikhemissi/azd-microsoft-discovery \
-  --name discovery-bundle-linux-amd64 --dir ./downloaded-extension
-cd downloaded-extension
-sha256sum --check SHA256SUMS
-azd extension install ./ikhemissi-azd-discovery_<version>.zip --force
-```
-
-The artifact contains the extension ZIP directly after `gh run download` extracts
-GitHub's outer archive. Actions artifacts are temporary; use Releases for persistent
-versioned distribution.
-
-Run quality checks from the extension repository:
-
-```sh
-golangci-lint run --timeout 10m
-go fix -diff ./...
-go vet ./...
-mkdir -p coverage
-go test -race -count=1 -coverprofile=coverage/offline.out ./...
-go tool cover -func=coverage/offline.out
-```
-
-Use golangci-lint **v2.11.4** to match CI. Coverage is informational, not a
-percentage gate or cloud certification.
-
-After installing the bundle in an isolated `AZD_CONFIG_DIR`, run native tests:
-
-```sh
-AZD_DISCOVERY_CONTAINER_TESTS=1 \
-  go test -count=1 -v -run TestNativeContainerPackage .
-AZD_DISCOVERY_NATIVE_TESTS=1 \
-  go test -count=1 -v -run 'Test(NativeReferencePackage|(Native|Standalone)ReadOnlyCommands)' .
-```
-
-These use a scratch image without base-image pulls, provisioning, publication,
-or simulations. Fixture images are cleaned up even on failure. Native failure
-tests allow only the precisely documented host metadata/error exceptions.
-
-Build and validation notes:
-
-- Canonical schemas use draft 2020-12 `$defs` to survive azd metadata caching.
-- Definitions stay inside the project after symlink resolution. YAML accepts
-  one bounded object document, without anchors, aliases, duplicate keys,
-  non-string keys, or unsupported tags.
-- `bin/`, `artifacts/`, and `coverage/` are disposable generated output, ignored
-  by Git. Build/package/test commands recreate them; they are not source assets.
-- Build scripts use `-trimpath`, disable CGO, and support a repository with no
-  commits by setting commit metadata to `none`.
-
-### Automatic GitHub Releases
-
-The first normal release is [v0.1.0](https://github.com/ikhemissi/azd-microsoft-discovery/releases/tag/v0.1.0).
-Subsequent releases use pinned **git-cliff 2.14.2** and Conventional Commits;
-there is no manual version bump, release PR, or tag step.
-
-| Commit | Release effect during `0.x` |
-| --- | --- |
-| `fix: ...`, `perf: ...` | Patch, for example `0.1.0` to `0.1.1` |
-| `feat: ...` | Minor, for example `0.1.0` to `0.2.0` |
-| `feat!: ...` or a `BREAKING CHANGE:` footer | Minor while the public API is `0.x` |
-| `docs: ...`, `chore: ...`, `ci: ...`, `test: ...` without breaking changes | No release |
-
-The highest applicable bump across commits since the last release wins. Use
-Conventional Commit subjects for commits or squash-merge titles. `perf:` is a
-patch trigger, including scoped performance changes. Breaking changes on normally
-ignored types remain releasable and visible in notes. Git-cliff preserves `0.x`
-for breaking changes and uses major increments once a deliberate `1.0` baseline
-exists.
-
-For each push to `main`, the Linux-only release workflow:
-
-1. Requires the regular quality and native checks to pass.
-2. Reads the complete Git history and release tags to compute the next version.
-3. Updates the manifest and binary version before running tests and building.
-4. Tests the new-version bundle and writes its checksum.
-5. Commits only version metadata and generated changelog, atomically pushes the
-   corresponding annotated Git tag and release commit, and publishes the exact
-   tested bundle plus `SHA256SUMS` and git-cliff-generated release notes using `gh`.
-
-Normal versions have no preview suffix and are not GitHub prereleases. Releases
-are serialized and published tags/assets are not intentionally overwritten.
-The generated release commit uses `[skip ci]`; the built-in GitHub token also
-prevents recursive workflow triggers. Publishing is performed in the same workflow,
-not by relying on another workflow triggered by the generated tag.
-
-Only the release job has `contents: write`; PR jobs cannot publish. It uses the
-built-in `GITHUB_TOKEN`, with no personal token or Azure credentials required.
-Repository branch rules must permit the Actions bot to push the three release
-metadata files; protected branches may require an approved GitHub App/bypass policy.
-The workflow does not grant itself permissions or modify branch protection.
-
-Release jobs check that the checkout is current before work starts and again
-before pushing, skip unchanged versions, and refuse to reuse existing tags or
-overwrite published releases. If publication fails after the release commit/tag
-was pushed, rerun the workflow at that release commit: it can rebuild/test and
-finish publication, including an unpublished draft. Only draft assets may be
-replaced during recovery; published releases are left unchanged.
-
-There is no Node/npm or SVU dependency. Git-cliff is a standalone Rust binary,
-installed from its pinned Linux release with SHA-512 verification; no Rust
-compiler is required. A small Go helper synchronizes native version files.
-The same Go/native checks and bundle script are shared between CI and releases.
-Offline tooling tests and dry-run:
-
-```sh
-bash scripts/install-git-cliff.sh /absolute/path/to/git-cliff-tools
-export PATH=/absolute/path/to/git-cliff-tools:$PATH
-DISCOVERY_RELEASE_TESTS=1 go test -count=1 -run '^TestGitCliffReleasePolicy$' .
-go test ./scripts/release-version
-bash scripts/release.sh --dry-run
-```
-
-The dry-run requires a clean, current `main` checkout and fetches Git history,
-but does not edit version files, create tags, build or publish releases.
-CI tests commit classification, categorized notes, `perf` handling, zero-major
-breaking rules, version synchronization and unchanged Git state.
-
-## Known limits and remaining verification
-
-| Area | Current boundary |
-| --- | --- |
-| Local compatibility | Tested with azd 1.35.0 and Podman 4.9.3 |
-| Container publication | Offline-tested; live ACR credentials/RBAC and Podman push remain unverified |
-| Discovery API | Offline-tested; endpoint, payload, readiness, and recovery behavior need authorized tenant testing |
-| API versions | Tool ARM API: `2026-06-01`; agent workspace API: `2026-02-01-preview` |
-| Endpoint and authentication | Tool IDs use workspace subscription/RG; workspace endpoint derives from verified name; SDK credentials use the selected subscription's resolved tenant and ARM/Discovery audiences |
-| GPU workloads | Not certified |
-| Knowledge bases | No KB target, upload, indexing, attachment, or status/index command |
-| KB follow-up questions | Storage-location resolution, GA agent attachment, and whether optional source identity can be omitted |
-
-No live Azure provisioning, publication, or Discovery mutation has been
-authorized or performed during development. Offline fixtures are not proof of
-the live API contract.
-
-Further detail: [configuration schema](schemas/discovery.schema.json) ·
-[changelog](CHANGELOG.md).
+For local builds, tests, release automation, and development artifacts, see
+[CONTRIBUTING.md](CONTRIBUTING.md). Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 
-The tool/agent lifecycle is implemented and tested locally and on GitHub's Linux
-runner. Both quality and native smoke-test jobs passed for `c9189fe` in
-[the first hosted CI run](https://github.com/ikhemissi/azd-microsoft-discovery/actions/runs/38085870149).
-The next priority is live validation, not additional service types. Cloud tests
-require explicit authorization; CI remains Linux-only.
-
-### 1. Validate the first iteration
-
-| Task | Completion criteria |
+| Next step | Status or scope |
 | --- | --- |
-| Run hosted CI | Complete: Linux quality and native smoke-test jobs passed for `c9189fe`; keep these checks passing |
-| Test a newer azd host | Existing packaging and command tests pass alongside the pinned minimum host |
-| Migrate the GROMACS demo | Add the model-name Terraform output and replace the old hook with native services |
-| Validate build mode in Azure | Provision, publish to ACR, verify the digest, register the tool, and deploy the agent with correct bindings |
-| Validate reference mode in Azure | No build/push; tool readback contains the exact supplied digest |
-| Exercise redeployment and recovery | Verify unchanged agent reconciliation, interrupted operations, failed exports, and corrected failures against the live service |
+| Linux CI and automatic Releases | Working; versions, annotated tags, notes, bundles, and checksums are automated |
+| Broader live validation | Reference mode, Podman publication, redeployment, permissions, and recovery |
+| Newer azd compatibility | Test alongside the pinned minimum |
+| KB support | Resolve storage sources, GA attachment format, and optional identity behavior before implementation |
+| Later features | Explicit/automatic indexing, MCP/OpenAPI tools, uploads, remote diagnostics, GPU certification |
 
-Resolve any endpoint, authentication, API-contract, or Podman-publication
-differences exposed by these tests before calling the release cloud-verified.
-
-### 2. Publish and validate releases
-
-- First normal release `v0.1.0` is published with its Git tag and checksum.
-- Enable git-cliff release automation by committing/pushing the workflow changes;
-  future versions and releases are generated from Conventional Commits.
-- Verify installation from the published release in a clean, isolated configuration.
-- Pin the extension version in demo instructions.
-- Record tested host/runtime versions and remaining limitations.
-- Optionally add a custom azd registry later for install-by-ID and automatic updates.
-
-### 3. Extend functionality after the first iteration
-
-| Feature | Planned scope |
-| --- | --- |
-| `discovery.knowledgebase` | Reconcile named KBs under Terraform-owned Bookshelves; start with existing storage-backed sources |
-| Agent KB attachment | Verify the GA reference format and attachment before first indexing; do not invent version suffixes |
-| Indexing | Add an explicit index command and optional deployment-triggered indexing with `autoindex: true` by default |
-| MCP/OpenAPI tools | Verify Discovery contracts and implement their complete lifecycles |
-| Local-folder ingestion | Upload support after storage-backed KB ingestion works |
-| Remote diagnostics | Extend doctor beyond local configuration validation |
-| GPU workloads | Separate compatibility and workload certification |
-| Upstream contribution | Optional community registry listing or source contribution |
-
-For KB support, preserve these design boundaries:
-
-- Resolve the parent Bookshelf by name in the azd subscription/resource group,
-  with explicit scope overrides available.
-- Verify source-location resolution, GA agent attachment, and whether the
-  optional source identity can be omitted before finalizing configuration.
-- Prefer omitting the optional identity and surfacing API errors unless testing
-  establishes that an identity must be supplied.
-- With `autoindex: false`, reconcile configuration without indexing; verify that
-  agent deployment remains possible before relying on this behavior.
-- Keep infrastructure, permissions, and compute capacity under Terraform ownership.
-  Do not introduce implicit role grants or scaling.
-
-Cross-platform checks remain deferred and are not first-iteration release gates.
+KB infrastructure remains Terraform-owned. Future indexing is planned with an
+explicit command and `autoindex: true` by default; none of this is implemented
+yet. Cross-platform checks remain deferred; CI stays Linux-only.
