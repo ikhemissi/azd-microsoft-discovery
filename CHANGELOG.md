@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-10-12)
 
-- Automate normal `0.x` GitHub Releases with pinned git-cliff, native azd
-  packaging, Git and `gh`; remove Node/npm release dependencies. Generate
-  categorized commit-based notes, treat `perf` as patch, preserve zero-major
-  breaking releases, and publish verified bundles with corresponding annotated tags.
+### Features
+
+- automate releases with git-cliff (ff049b0)
+
+
 
 ## 0.1.0 (2026-10-12)
 
