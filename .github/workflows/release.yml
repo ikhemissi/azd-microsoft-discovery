@@ -1,71 +1,72 @@
-name: Publish GitHub release
+name: Automatic GitHub release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: discovery-release-${{ github.ref }}
+  group: discovery-release-main
   cancel-in-progress: false
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Verify tag and extension version
-        run: |
-          go test -count=1 -v \
-            -run '^Test(ManifestVersionMatchesBinaryDefault|ReleaseVersionMatchesTag)$' .
-
   checks:
-    needs: version
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
-  publish:
+  release:
     needs: checks
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - name: Download the tested bundle from this run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: discovery-bundle-linux-amd64
-          path: artifacts
-      - name: Verify checksum and publish release
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install pinned git-cliff
+        run: bash scripts/install-git-cliff.sh "$RUNNER_TEMP/git-cliff"
+      - name: Install minimum azd host and Podman
+        run: |
+          echo "AZD_CONFIG_DIR=$RUNNER_TEMP/discovery-release-azd" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y podman jq
+          curl --fail --location --retry 3 \
+            https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.35.0/azd-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/azd.tar.gz"
+          mkdir -p "$RUNNER_TEMP/azd-minimum"
+          tar -xzf "$RUNNER_TEMP/azd.tar.gz" -C "$RUNNER_TEMP/azd-minimum"
+          sudo install "$RUNNER_TEMP/azd-minimum/azd-linux-amd64" /usr/local/bin/azd
+      - name: Generate version, test bundle, tag, and publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          AZD_COLLECT_TELEMETRY: "no"
+          DISCOVERY_RELEASE_TESTS: "1"
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
-          set -euo pipefail
-          cd artifacts
-          version="${RELEASE_TAG#v}"
-          bundle="ikhemissi-azd-discovery_${version}.zip"
-          test -s "$bundle"
-          sha256sum --check SHA256SUMS
-
-          flags=()
-          if [[ "${version%%+*}" == *-* ]]; then
-            flags+=(--prerelease --latest=false)
-          fi
-
-          notes="Linux amd64 extension bundle; requires azd >=1.35.0.
-          Install: azd extension install https://github.com/${GH_REPO}/releases/download/${RELEASE_TAG}/${bundle}
-          SHA256SUMS covers the exact CI-tested bundle. This release does not imply cloud or GPU certification."
-
-          gh release create "$RELEASE_TAG" "$bundle" SHA256SUMS \
-            --repo "$GH_REPO" --verify-tag --title "$RELEASE_TAG" \
-            --generate-notes --notes "$notes" "${flags[@]}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          bash scripts/release.sh
+      - name: Upload generated release bundle
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-bundle-linux-amd64
+          path: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS
+          if-no-files-found: ignore
+          retention-days: 30

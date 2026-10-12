@@ -47,8 +47,7 @@ this repository, or extension developer tooling to install them.
 Choose a published version from [GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases):
 
 ```sh
-# Replace with an existing published version; the workflow does not create
-# a release until a matching version tag is pushed.
+# Select an existing published version.
 VERSION=0.1.0
 azd extension install \
   "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
@@ -428,36 +427,73 @@ Build and validation notes:
 - Build scripts use `-trimpath`, disable CGO, and support a repository with no
   commits by setting commit metadata to `none`.
 
-### Publish a GitHub Release
+### Automatic GitHub Releases
 
-Release automation remains Linux-only. Pushing a `v<version>` tag:
+The first normal release is [v0.1.0](https://github.com/ikhemissi/azd-microsoft-discovery/releases/tag/v0.1.0).
+Subsequent releases use pinned **git-cliff 2.14.2** and Conventional Commits;
+there is no manual version bump, release PR, or tag step.
 
-1. Validates that the tag matches both the manifest and binary default version.
-2. Runs the same Linux quality and native packaging checks as normal CI.
-3. Validates the bundle's version, Linux platform, and embedded artifact checksum.
-4. Downloads that run's tested bundle, verifies `SHA256SUMS`, and publishes both
-   files to GitHub Releases without rebuilding.
+| Commit | Release effect during `0.x` |
+| --- | --- |
+| `fix: ...`, `perf: ...` | Patch, for example `0.1.0` to `0.1.1` |
+| `feat: ...` | Minor, for example `0.1.0` to `0.2.0` |
+| `feat!: ...` or a `BREAKING CHANGE:` footer | Minor while the public API is `0.x` |
+| `docs: ...`, `chore: ...`, `ci: ...`, `test: ...` without breaking changes | No release |
 
-Versions containing a prerelease suffix, such as `-preview.1`, are marked as
-GitHub prereleases and are not marked “Latest”. Existing releases are never
-silently overwritten; use a new version rather than moving a published tag.
-Only the final publishing job has `contents: write`; PR and test jobs cannot
-publish a release. No Azure credentials, provision, or deployment commands are
-used by release automation.
+The highest applicable bump across commits since the last release wins. Use
+Conventional Commit subjects for commits or squash-merge titles. `perf:` is a
+patch trigger, including scoped performance changes. Breaking changes on normally
+ignored types remain releasable and visible in notes. Git-cliff preserves `0.x`
+for breaking changes and uses major increments once a deliberate `1.0` baseline
+exists.
 
-To prepare a release:
+For each push to `main`, the Linux-only release workflow:
+
+1. Requires the regular quality and native checks to pass.
+2. Reads the complete Git history and release tags to compute the next version.
+3. Updates the manifest and binary version before running tests and building.
+4. Tests the new-version bundle and writes its checksum.
+5. Commits only version metadata and generated changelog, atomically pushes the
+   corresponding annotated Git tag and release commit, and publishes the exact
+   tested bundle plus `SHA256SUMS` and git-cliff-generated release notes using `gh`.
+
+Normal versions have no preview suffix and are not GitHub prereleases. Releases
+are serialized and published tags/assets are not intentionally overwritten.
+The generated release commit uses `[skip ci]`; the built-in GitHub token also
+prevents recursive workflow triggers. Publishing is performed in the same workflow,
+not by relying on another workflow triggered by the generated tag.
+
+Only the release job has `contents: write`; PR jobs cannot publish. It uses the
+built-in `GITHUB_TOKEN`, with no personal token or Azure credentials required.
+Repository branch rules must permit the Actions bot to push the three release
+metadata files; protected branches may require an approved GitHub App/bypass policy.
+The workflow does not grant itself permissions or modify branch protection.
+
+Release jobs check that the checkout is current before work starts and again
+before pushing, skip unchanged versions, and refuse to reuse existing tags or
+overwrite published releases. If publication fails after the release commit/tag
+was pushed, rerun the workflow at that release commit: it can rebuild/test and
+finish publication, including an unpublished draft. Only draft assets may be
+replaced during recovery; published releases are left unchanged.
+
+There is no Node/npm or SVU dependency. Git-cliff is a standalone Rust binary,
+installed from its pinned Linux release with SHA-512 verification; no Rust
+compiler is required. A small Go helper synchronizes native version files.
+The same Go/native checks and bundle script are shared between CI and releases.
+Offline tooling tests and dry-run:
 
 ```sh
-# First set the same new version in extension.yaml and
-# internal/cmd/version.go, then commit those changes.
-VERSION=0.1.0
-go test -count=1 -run '^TestManifestVersionMatchesBinaryDefault$' .
-git tag -a "v${VERSION}" -m "Release ${VERSION}"
-git push origin main "v${VERSION}"
+bash scripts/install-git-cliff.sh /absolute/path/to/git-cliff-tools
+export PATH=/absolute/path/to/git-cliff-tools:$PATH
+DISCOVERY_RELEASE_TESTS=1 go test -count=1 -run '^TestGitCliffReleasePolicy$' .
+go test ./scripts/release-version
+bash scripts/release.sh --dry-run
 ```
 
-Choose a new version for each release. This adds publication support but does
-not itself create a tag or publish a release.
+The dry-run requires a clean, current `main` checkout and fetches Git history,
+but does not edit version files, create tags, build or publish releases.
+CI tests commit classification, categorized notes, `perf` handling, zero-major
+breaking rules, version synchronization and unchanged Git state.
 
 ## Known limits and remaining verification
 
@@ -503,8 +539,9 @@ differences exposed by these tests before calling the release cloud-verified.
 
 ### 2. Publish and validate releases
 
-- Release automation is implemented; publish the first versioned bundle and
-  checksum by pushing a matching tag after committing these changes.
+- First normal release `v0.1.0` is published with its Git tag and checksum.
+- Enable git-cliff release automation by committing/pushing the workflow changes;
+  future versions and releases are generated from Conventional Commits.
 - Verify installation from the published release in a clean, isolated configuration.
 - Pin the extension version in demo instructions.
 - Record tested host/runtime versions and remaining limitations.

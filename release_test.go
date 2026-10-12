@@ -55,11 +55,11 @@ func TestReleaseTagValidation(t *testing.T) {
 		tag, version string
 		valid        bool
 	}{
-		{"v0.1.0-preview.1", "0.1.0-preview.1", true},
+		{"v0.1.0", "0.1.0", true},
 		{"v1.2.3", "1.2.3", true},
 		{"v1.2.3+build.1", "1.2.3+build.1", true},
-		{"v0.1.0-preview.2", "0.1.0-preview.1", false},
-		{"0.1.0-preview.1", "0.1.0-preview.1", false},
+		{"v0.2.0", "0.1.0", false},
+		{"0.1.0", "0.1.0", false},
 		{"v1.2", "1.2", false},
 		{"v01.2.3", "01.2.3", false},
 		{"v1.2.3-01", "1.2.3-01", false},

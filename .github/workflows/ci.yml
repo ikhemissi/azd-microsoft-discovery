@@ -19,32 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AZD_COLLECT_TELEMETRY: "no"
+      DISCOVERY_RELEASE_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
+      - name: Install pinned git-cliff
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          bash scripts/install-git-cliff.sh "$RUNNER_TEMP/git-cliff"
       - name: Check formatting
-        run: test -z "$(gofmt -l .)"
-      - name: Build
-        run: go build ./...
-      - name: Vet
-        run: go vet ./...
+        run: git ls-files -z -- '*.go' | xargs -0 gofmt -l | tee /tmp/gofmt-files; test ! -s /tmp/gofmt-files
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.11.4
           args: --timeout 10m
-      - name: Offline tests with race detection
-        run: |
-          mkdir -p coverage
-          go test -race -count=1 -coverprofile=coverage/offline.out ./...
-          go tool cover -func=coverage/offline.out | tee coverage/summary.txt
-      - name: Go modernization
-        run: |
-          go fix -diff ./... > coverage/go-fix.diff
-          test ! -s coverage/go-fix.diff
+      - name: Build, vet, race tests, coverage, and modernization
+        run: bash scripts/check-go.sh
       - name: Upload coverage
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -77,25 +72,8 @@ jobs:
           sudo install "$RUNNER_TEMP/azd-minimum/azd-linux-amd64" /usr/local/bin/azd
           azd version
           podman --version
-      - name: Build and install fresh bundle
-        run: |
-          azd extension install microsoft.azd.extensions --version 0.13.0
-          azd x build
-          version="$(./bin/ikhemissi-azd-discovery-linux-amd64 version --output json | jq -er '.version')"
-          azd x pack --bundle --output ./artifacts
-          azd extension install "./artifacts/ikhemissi-azd-discovery_${version}.zip" --force
-          azd discovery version
-      - name: Native offline smoke tests
-        run: |
-          go test -count=1 -v \
-            -run 'Test(NativeContainerPackage|NativeReferencePackage|(Native|Standalone)ReadOnlyCommands)' .
-      - name: Verify release bundle and write checksum
-        run: |
-          version="$(./bin/ikhemissi-azd-discovery-linux-amd64 version --output json | jq -er '.version')"
-          export DISCOVERY_RELEASE_BUNDLE="$PWD/artifacts/ikhemissi-azd-discovery_${version}.zip"
-          go test -count=1 -v -run '^TestLinuxReleaseBundle$' .
-          cd artifacts
-          sha256sum "ikhemissi-azd-discovery_${version}.zip" > SHA256SUMS
+      - name: Build, install, test, and verify fresh bundle
+        run: bash scripts/build-test-bundle.sh
       - name: Upload tested extension bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
