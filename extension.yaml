@@ -3,7 +3,7 @@ id: ikhemissi.azd.discovery
 namespace: discovery
 displayName: Microsoft Discovery Community Extension
 description: Build containers, register Discovery tools, and reconcile prompt agents and knowledge bases.
-version: 0.2.0
+version: 0.3.0
 requiredAzdVersion: ">=1.35.0"
 language: go
 capabilities:

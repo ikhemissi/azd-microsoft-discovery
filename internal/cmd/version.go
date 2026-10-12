@@ -10,7 +10,7 @@ import (
 
 var (
 	// Populated at build time
-	Version   = "0.2.0"
+	Version   = "0.3.0"
 	Commit    = "none"
 	BuildDate = "unknown"
 )

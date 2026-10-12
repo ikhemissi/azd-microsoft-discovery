@@ -1,16 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-12)
 
-- Add the offline-tested June GA `discovery.knowledgebase` service: resolve
-  existing Bookshelves by scoped name, verify Terraform-owned storage assets,
-  reconcile configuration, and index by default (`autoindex: false` opts out).
-- Add `azd discovery index <service>` for an existing reconciled KB, with
-  persistent configuration/index operation recovery, run correlation, duplicate
-  submission protection, and verified output restoration.
-- Support explicit Bookshelf subscription/resource-group and indexing pool
-  overrides using public azd credentials. Omit optional source identities;
-  uploads, registration creation, KB versions, and agent attachment remain unsupported.
+### Features
+
+- add GA knowledge-base lifecycle and indexing (7ff2bbe)
+
+
 
 ## 0.2.0 (2026-10-12)
 
