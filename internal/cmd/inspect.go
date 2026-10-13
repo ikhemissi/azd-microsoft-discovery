@@ -75,14 +75,14 @@ func newInspectCommand(name string, extension *azdext.ExtensionContext, load pro
 				result.Project = project.Name
 				result.DeploymentSupported = true
 				for _, service := range project.Services {
-					if service.Bookshelf != nil || (service.Agent != nil && len(service.Agent.KnowledgeBases) > 0) {
+					if service.Bookshelf != nil {
 						result.DeploymentSupported = false
 					}
 				}
 				result.Checks = []check{
 					{Name: "configuration", State: "passed", Message: "Local schemas, paths, definitions, supported scope checks, and binding declarations validated."},
 					{Name: "azureReadiness", State: "notChecked", Message: "Authentication, remote resources, RBAC, registry access, networking, and indexing readiness are not checked in this iteration."},
-					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent/KB lifecycle providers are registered and offline-tested. KB indexing and omitted source identity behavior require live validation; agent KB attachment is not implemented."},
+					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent/KB lifecycle providers and KB attachment are offline-tested. KB indexing, omitted source identity behavior and service-returned attachment IDs require live validation."},
 				}
 				result.Services = summarize(project)
 			}
@@ -133,7 +133,7 @@ func summarize(project *config.Project) []servicePlan {
 				item.UnresolvedBindings = append(item.UnresolvedBindings, key)
 			}
 			for _, binding := range service.Agent.KnowledgeBases {
-				item.UnresolvedBindings = append(item.UnresolvedBindings, binding.Service+"."+binding.Output)
+				item.UnresolvedBindings = append(item.UnresolvedBindings, binding.Service+".knowledgeBaseId")
 			}
 			slices.Sort(item.UnresolvedBindings)
 		case config.KnowledgeBaseHost:

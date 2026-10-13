@@ -379,14 +379,18 @@ func (p *Provider) bindingOutputs(ctx context.Context, client *discovery.Client,
 			return nil, errors.New("unsupported scalar dependency host")
 		}
 	}
+	for _, binding := range service.Agent.KnowledgeBases {
+		id, err := p.verifiedKnowledgeBaseID(ctx, store, project.Services[binding.Service])
+		if err != nil {
+			return nil, fmt.Errorf("knowledge-base dependency %q: %w", binding.Service, err)
+		}
+		outputs[binding.Service] = map[string]string{"knowledgeBaseId": id}
+	}
 	return outputs, nil
 }
 
 func (p *Provider) deployAgent(ctx context.Context, client *discovery.Client, store *state.Store,
 	project *config.Project, service *config.Service, record *state.Record) error {
-	if len(service.Agent.KnowledgeBases) > 0 {
-		return errors.New("bookshelf attachment requires separately verified readiness/API contracts; not implemented")
-	}
 	outputs, err := p.bindingOutputs(ctx, client, store, project, service)
 	if err != nil {
 		return err
@@ -476,7 +480,17 @@ func (p *Provider) deployAgent(ctx context.Context, client *discovery.Client, st
 		}
 		upsert := client.WorkspaceEndpoint + "/projects/" + url.PathEscape(id.Name) +
 			":upsertAgent?api-version=" + discovery.AgentVersion
-		response, err := client.Request(ctx, http.MethodPost, upsert, payload)
+		body := struct {
+			*discovery.AgentPayload
+			KnowledgeBases *[]discovery.KnowledgeBaseReference `json:"knowledgeBases,omitempty"`
+		}{AgentPayload: payload}
+		if len(payload.KnowledgeBases) > 0 {
+			body.KnowledgeBases = &payload.KnowledgeBases
+		} else if agent != nil && len(agent.KnowledgeBases) > 0 {
+			empty := []discovery.KnowledgeBaseReference{}
+			body.KnowledgeBases = &empty
+		}
+		response, err := client.Request(ctx, http.MethodPost, upsert, body)
 		if err != nil {
 			var rejection *discovery.HTTPError
 			if errors.As(err, &rejection) && rejection.Rejected() {

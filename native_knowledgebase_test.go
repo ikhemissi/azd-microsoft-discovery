@@ -33,7 +33,16 @@ services:
       bookshelfName: ${BOOKSHELF}
       sources:
         - storageAssetResourceId: ${ASSET}
+  researcher:
+    host: discovery.agent
+    uses: [literature]
+    config:
+      model:
+        deploymentName: ${MODEL_NAME}
+      knowledgeBases:
+        - service: literature
 `,
+		"agent.yaml":         "name: researcher\nkind: prompt\ninstructions: Cite the indexed literature.\n",
 		".azure/config.json": `{"defaultEnvironment":"demo"}`,
 		".azure/demo/.env":   "AZURE_ENV_NAME=\"demo\"\n",
 	} {
@@ -50,10 +59,15 @@ services:
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("KB packaging required provisioned outputs or container/Azure access: %v\n%s", err, output)
 	}
+	command = exec.Command("azd", "package", "researcher", "--cwd", root, "--environment", "demo", "--no-prompt")
+	command.Env = append(os.Environ(), "AZD_CONTAINER_RUNTIME=unavailable-runtime", "AZD_COLLECT_TELEMETRY=no")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("KB-dependent agent packaging required cloud outputs or readback: %v\n%s", err, output)
+	}
 	scope := strings.TrimSuffix(nativeWorkspace, "/workspaces/demo")
 	values := "AZURE_ENV_NAME=\"demo\"\nAZURE_SUBSCRIPTION_ID=\"00000000-0000-0000-0000-000000000001\"\n" +
 		"AZURE_RESOURCE_GROUP=\"demo\"\nWORKSPACE=\"" + nativeWorkspace + "\"\nPROJECT=\"" + nativeWorkspace +
-		"/projects/research\"\nBOOKSHELF=\"literature\"\nASSET=\"" + scope + "/storageContainers/data/storageAssets/papers\"\n"
+		"/projects/research\"\nBOOKSHELF=\"literature\"\nASSET=\"" + scope + "/storageContainers/data/storageAssets/papers\"\nMODEL_NAME=\"chat\"\n"
 	if err := os.WriteFile(filepath.Join(root, ".azure/demo/.env"), []byte(values), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +85,8 @@ services:
 		} `json:"services"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil || report.Status != "valid" ||
-		len(report.Services) != 1 || report.Services[0].Host != "discovery.knowledgebase" ||
-		report.Services[0].Intent != "reconcileAndIndexKnowledgeBase" {
+		len(report.Services) != 2 || report.Services[0].Host != "discovery.knowledgebase" ||
+		report.Services[0].Intent != "reconcileAndIndexKnowledgeBase" || report.Services[1].Host != "discovery.agent" {
 		t.Fatalf("unexpected native KB plan: %s (%v)", stdout.String(), err)
 	}
 }
