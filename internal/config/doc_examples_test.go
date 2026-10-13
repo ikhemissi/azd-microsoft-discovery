@@ -35,19 +35,30 @@ func documentValues(name string) (string, bool) {
 		"DISCOVERY_PAPERS_ASSET_ID":            scope + "/storageContainers/data/storageAssets/papers",
 		"AZURE_SUBSCRIPTION_ID":                "00000000-0000-0000-0000-000000000001",
 		"AZURE_RESOURCE_GROUP":                 "demo",
+		"DISCOVERY_STORAGE_CONTAINER_ID":       scope + "/storageContainers/inputs",
+		"DISCOVERY_INPUT_BLOB_CONTAINER_ID":    "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.Storage/storageAccounts/account/blobServices/default/containers/inputs",
+		"DISCOVERY_EXPERIMENT_A_ASSET_ID":      scope + "/storageContainers/inputs/storageAssets/experiment-a-v1",
+		"DISCOVERY_EXPERIMENT_B_ASSET_ID":      scope + "/storageContainers/inputs/storageAssets/experiment-b-v2",
 	}
 	value, exists := values[name]
 	return value, exists
 }
 
 func TestPublishedAzureYAMLExamples(t *testing.T) {
-	for _, name := range []string{"gromacs-build", "knowledgebase"} {
+	for _, name := range []string{"gromacs-build", "knowledgebase", "reusable-data"} {
 		t.Run(name, func(t *testing.T) {
 			document, err := ReadDocument(filepath.Join("..", "..", "examples", name, "azure.yaml"))
 			if err != nil {
 				t.Fatal(err)
 			}
 			root := documentationFixture(t)
+			if name == "knowledgebase" {
+				agent, err := os.ReadFile("../../examples/knowledgebase/agent.yaml")
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, root, "agent.yaml", string(agent))
+			}
 			if _, err := ParseForPackage(root, document, noValues); err != nil {
 				t.Fatalf("pre-provision Package example: %v", err)
 			}

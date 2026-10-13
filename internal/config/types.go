@@ -20,6 +20,28 @@ type Settings struct {
 	ProjectResourceID       string `json:"projectResourceId"`
 	NodePoolResourceID      string `json:"nodePoolResourceId"`
 	OperationTimeoutSeconds int    `json:"operationTimeoutSeconds"`
+	Data                    *Data  `json:"data,omitempty"`
+}
+
+type Data struct {
+	Sources  map[string]DataSource `json:"sources"`
+	Datasets map[string]Dataset    `json:"datasets"`
+}
+
+type DataSource struct {
+	StorageContainerResourceID string `json:"storageContainerResourceId"`
+	BlobContainerResourceID    string `json:"blobContainerResourceId"`
+	Prefix                     string `json:"prefix"`
+}
+
+type Dataset struct {
+	Source                 string `json:"source"`
+	Directory              string `json:"directory"`
+	Manifest               string `json:"manifest"`
+	Namespace              string `json:"namespace"`
+	Version                string `json:"version"`
+	Overwrite              bool   `json:"overwrite"`
+	StorageAssetResourceID string `json:"storageAssetResourceId,omitempty"`
 }
 
 type Service struct {
@@ -69,10 +91,14 @@ type Binding struct {
 }
 
 type Agent struct {
-	Definition     string             `json:"definition"`
-	Model          *AgentModel        `json:"model"`
-	Bindings       map[string]Binding `json:"bindings"`
-	KnowledgeBases []Binding          `json:"knowledgeBases"`
+	Definition     string                 `json:"definition"`
+	Model          *AgentModel            `json:"model"`
+	Bindings       map[string]Binding     `json:"bindings"`
+	KnowledgeBases []KnowledgeBaseBinding `json:"knowledgeBases"`
+}
+
+type KnowledgeBaseBinding struct {
+	Service string `json:"service"`
 }
 
 type AgentModel struct {

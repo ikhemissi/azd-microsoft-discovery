@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
 	github.com/azure/azure-dev/cli/azd v1.35.0
 	github.com/spf13/cobra v1.10.1
 )

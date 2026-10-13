@@ -36,6 +36,21 @@ func validatedID(value string) (string, error) {
 	return id.String(), nil
 }
 
+func ResolveEnvironment(ctx context.Context, client *azdext.AzdClient, selection string) (string, error) {
+	if selection != "" {
+		return selection, nil
+	}
+	return currentEnvironment(ctx, client)
+}
+
+func CredentialForEnvironment(ctx context.Context, client *azdext.AzdClient, selection string) (*azdext.TokenProvider, error) {
+	environment, err := ResolveEnvironment(ctx, client, selection)
+	if err != nil {
+		return nil, err
+	}
+	return tokenProviderForEnvironment(ctx, client, environment)
+}
+
 func newTokenProvider(ctx context.Context, client *azdext.AzdClient) (*azdext.TokenProvider, error) {
 	environment, err := currentEnvironment(ctx, client)
 	if err != nil {

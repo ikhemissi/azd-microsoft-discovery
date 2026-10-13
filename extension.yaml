@@ -2,7 +2,7 @@
 id: ikhemissi.azd.discovery
 namespace: discovery
 displayName: Microsoft Discovery Community Extension
-description: Build containers, register Discovery tools, and reconcile prompt agents and knowledge bases.
+description: Deploy Discovery tools, agents and knowledge bases, and explicitly validate/upload reusable input bundles.
 version: 0.3.0
 requiredAzdVersion: ">=1.35.0"
 language: go
@@ -17,7 +17,7 @@ providers:
     description: Build and publish or reference an immutable tool image and register it.
   - name: discovery.agent
     type: service-target
-    description: Reconcile a prompt agent using a verified model deployment name and tool bindings.
+    description: Reconcile a prompt agent using a verified model, tool bindings and indexed KB attachments.
   - name: discovery.knowledgebase
     type: service-target
     description: Reconcile a GA knowledge base using existing Bookshelf/storage registrations and optionally index it.
@@ -32,6 +32,18 @@ examples:
   - name: index
     description: Index an existing, reconciled knowledge-base service.
     usage: azd discovery index literature
+  - name: data-validate
+    description: Validate a checksummed input bundle locally without execution.
+    usage: azd discovery data validate experiment-a --local
+  - name: data-prepare
+    description: Create a local experiment checksum manifest without overwrite.
+    usage: azd discovery data prepare experiment-a --local
+  - name: data-upload
+    description: Inspect the existing Blob destination without writes.
+    usage: azd discovery data upload experiment-a --dry-run
+  - name: data-show
+    description: Show a verified IaC asset and its runtime locator for agent use.
+    usage: azd discovery data show experiment-a --agent researcher
 tags:
   - discovery
   - ai

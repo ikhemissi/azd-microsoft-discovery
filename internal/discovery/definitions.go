@@ -114,15 +114,39 @@ func AgentDefinition(service *config.Service, outputs map[string]map[string]stri
 			}
 		}
 	}
+	if len(service.Agent.KnowledgeBases) > 0 {
+		extensions, ok := definition["discoveryExtensions"].(map[string]any)
+		if !ok {
+			extensions = map[string]any{}
+			definition["discoveryExtensions"] = extensions
+		}
+		if _, exists := extensions["knowledgeBases"]; exists {
+			return nil, errors.New("native and managed knowledge-base attachments cannot be combined")
+		}
+		bases := []any{}
+		for _, binding := range service.Agent.KnowledgeBases {
+			id := outputs[binding.Service]["knowledgeBaseId"]
+			if err := config.ValidateKnowledgeBaseID(id); err != nil {
+				return nil, fmt.Errorf("verified knowledge-base dependency output is unavailable; deploy and index service %q first: %w", binding.Service, err)
+			}
+			bases = append(bases, map[string]any{"knowledgeBaseId": id})
+		}
+		extensions["knowledgeBases"] = bases
+	}
 	return definition, nil
 }
 
+type KnowledgeBaseReference struct {
+	KnowledgeBaseID string `json:"knowledgeBaseId"`
+}
+
 type AgentPayload struct {
-	Name                string         `json:"name"`
-	HumanInTheLoop      any            `json:"humanInTheLoop,omitempty"`
-	Tools               any            `json:"tools,omitempty"`
-	DiscoveryExtensions map[string]any `json:"discoveryExtensions"`
-	FoundryDetails      FoundryDetails `json:"foundryDetails"`
+	Name                string                   `json:"name"`
+	HumanInTheLoop      any                      `json:"humanInTheLoop,omitempty"`
+	Tools               any                      `json:"tools,omitempty"`
+	KnowledgeBases      []KnowledgeBaseReference `json:"knowledgeBases,omitempty"`
+	DiscoveryExtensions map[string]any           `json:"discoveryExtensions"`
+	FoundryDetails      FoundryDetails           `json:"foundryDetails"`
 }
 
 type FoundryDetails struct {
@@ -166,12 +190,18 @@ func Payload(definition map[string]any) (*AgentPayload, error) {
 			case "tools":
 				payload.Tools = value
 			case "knowledgeBases":
-				return nil, errors.New("knowledge-base request/readiness contracts are not verified; attachment is not implemented")
+				for _, raw := range value.([]any) {
+					base := raw.(map[string]any)
+					payload.KnowledgeBases = append(payload.KnowledgeBases, KnowledgeBaseReference{KnowledgeBaseID: base["knowledgeBaseId"].(string)})
+				}
 			default:
 				payload.DiscoveryExtensions[key] = value
 			}
 		}
 	}
+	slices.SortFunc(payload.KnowledgeBases, func(a, b KnowledgeBaseReference) int {
+		return strings.Compare(a.KnowledgeBaseID, b.KnowledgeBaseID)
+	})
 	return payload, nil
 }
 
@@ -191,6 +221,21 @@ func VerifyAgent(agent *Agent, expected *AgentPayload) error {
 	}
 	if latest.Definition == nil {
 		return errors.New("agent readback is missing foundryDetails.versions.latest.definition")
+	}
+	if len(agent.KnowledgeBases) != len(expected.KnowledgeBases) {
+		return errors.New("agent readback mismatch: knowledgeBases")
+	}
+	bases := map[string]bool{}
+	for _, base := range agent.KnowledgeBases {
+		if base.KnowledgeBaseID == "" || bases[base.KnowledgeBaseID] {
+			return errors.New("agent readback has missing or duplicate knowledge-base identifiers")
+		}
+		bases[base.KnowledgeBaseID] = true
+	}
+	for _, base := range expected.KnowledgeBases {
+		if !bases[base.KnowledgeBaseID] {
+			return errors.New("agent readback mismatch: knowledgeBases.knowledgeBaseId")
+		}
 	}
 	for _, field := range []struct {
 		path            string

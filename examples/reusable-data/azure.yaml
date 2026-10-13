@@ -1,0 +1,64 @@
+name: reusable-discovery-tool
+
+discovery:
+  schemaVersion: "1.0"
+  workspaceResourceId: ${DISCOVERY_WORKSPACE_ID}
+  projectResourceId: ${DISCOVERY_PROJECT_ID}
+  nodePoolResourceId: ${DISCOVERY_NODE_POOL_ID}
+  data:
+    sources:
+      experiment-inputs:
+        storageContainerResourceId: ${DISCOVERY_STORAGE_CONTAINER_ID}
+        blobContainerResourceId: ${DISCOVERY_INPUT_BLOB_CONTAINER_ID}
+        prefix: approved-experiments
+    datasets:
+      experiment-a:
+        source: experiment-inputs
+        directory: ./bundles/experiment-a
+        manifest: bundle.yaml
+        namespace: reusable-tool
+        version: v1
+        overwrite: false
+        storageAssetResourceId: ${DISCOVERY_EXPERIMENT_A_ASSET_ID}
+      experiment-b:
+        source: experiment-inputs
+        directory: ./bundles/experiment-b
+        manifest: bundle.yaml
+        namespace: reusable-tool
+        version: v2
+        overwrite: false
+        storageAssetResourceId: ${DISCOVERY_EXPERIMENT_B_ASSET_ID}
+
+services:
+  simulation:
+    host: discovery.tool
+    project: ./experiments/lysozyme-water
+    config:
+      definition: ./tool.cpu.yaml
+      image:
+        mode: reference
+        infraNode: worker
+        reference: ${DISCOVERY_TOOL_IMAGE_DIGEST}
+  literature:
+    host: discovery.knowledgebase
+    config:
+      name: gromacs-methods
+      bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
+      description: Reviewed scientific methods and protocol documents.
+      sources:
+        - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+      autoindex: true
+  researcher:
+    host: discovery.agent
+    project: ./experiments/lysozyme-water
+    uses: [simulation, literature]
+    config:
+      definition: ./agent.yaml
+      model:
+        deploymentName: ${DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME}
+      bindings:
+        gromacsToolId:
+          service: simulation
+          output: resourceId
+      knowledgeBases:
+        - service: literature

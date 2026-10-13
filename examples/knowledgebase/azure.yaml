@@ -16,3 +16,12 @@ services:
       sources:
         - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
       autoindex: true
+  researcher:
+    host: discovery.agent
+    uses: [literature]
+    config:
+      definition: ./agent.yaml
+      model:
+        deploymentName: ${DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME}
+      knowledgeBases:
+        - service: literature

@@ -3,7 +3,7 @@ package schemas
 import "testing"
 
 func TestAllEntriesCompileOffline(t *testing.T) {
-	for _, name := range []string{"project", "tool", "agent", "knowledgebase", "service"} {
+	for _, name := range []string{"project", "tool", "agent", "knowledgebase", "data", "bundle", "service"} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Compile(name); err != nil {
 				t.Fatal(err)

@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+- Add `config.knowledgeBases` for agent attachment to declared/indexed KB services.
+  Verify dependency state, source configuration and successful indexing with
+  subscription-scoped credentials, then use the service-returned KB ID unchanged.
+- Adapt native agent `knowledgeBases`, verify readback, explicitly clear removed
+  attachments and preserve recovery without duplicate agent versions. Keep
+  unchanged configuration-only KB deployments' verified indexing provenance.
+  Offline tests pass; live GA attachment/retrieval remains pending Bookshelf quota.
+- Add optional domain-neutral `discovery.data` sources/datasets and strict
+  versioned file/checksum manifests without changing tool/agent authoring.
+- Add local bundle validation and explicit, no-overwrite Blob uploads with
+  no-write dry-runs, tenant-aware azd authentication, project/storage scope
+  verification, full content readback, completion markers and resumable ownership.
+- Preserve/test runtime-mount descriptions and native output settings. Document
+  verified mount contracts, separate Discovery attachment/registration gates,
+  read-only sample integration guidance and an authorized two-bundle test plan.
+- Follow the official attached-asset/agent-mediated runtime workflow, preserving
+  code-environment flexibility; defer deterministic binding and additional
+  execution restrictions pending experience from authorized experiments.
+- Add local `data prepare` checksum generation and read-only `data show`
+  handoff reports. Verify per-dataset IaC-owned storage assets against their
+  exact Blob directory paths and include asset IDs/Discovery URIs in upload
+  results without creating assets or attaching/invoking conversations.
+
 ## 0.3.0 (2026-10-12)
 
 ### Features

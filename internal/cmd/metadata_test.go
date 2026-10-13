@@ -46,12 +46,24 @@ func TestMetadataSurvivesSDKCacheRoundtrip(t *testing.T) {
 		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{"model": map[string]any{"deploymentName": "chat"}}); err != nil {
 			t.Fatal(err)
 		}
-		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{"knowledgeBases": []any{}}); err == nil {
-			t.Fatal("metadata advertises deferred KB attachments")
+		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{"knowledgeBases": []any{map[string]any{"service": "literature"}}}); err != nil {
+			t.Fatalf("KB attachment references did not survive metadata caching: %v", err)
+		}
+		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{"knowledgeBases": []any{"literal-id"}}); err == nil {
+			t.Fatal("metadata accepted an unverified literal KB attachment")
 		}
 		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{
 			"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${ASSET}"}}}); err != nil {
 			t.Fatalf("KB metadata/default inputs did not survive caching: %v", err)
+		}
+		if err := extensions.ValidateAgainstSchema(schema.Project, map[string]any{
+			"schemaVersion": "1.0", "workspaceResourceId": "${WORKSPACE}", "projectResourceId": "${PROJECT}",
+			"data": map[string]any{
+				"sources":  map[string]any{"inputs": map[string]any{"storageContainerResourceId": "${REGISTRATION}", "blobContainerResourceId": "${BLOB}", "prefix": "approved"}},
+				"datasets": map[string]any{"example": map[string]any{"source": "inputs", "directory": "./inputs", "namespace": "experiment", "version": "v1", "overwrite": false, "storageAssetResourceId": "${ASSET}"}},
+			},
+		}); err != nil {
+			t.Fatalf("data metadata did not survive caching: %v", err)
 		}
 	}
 }

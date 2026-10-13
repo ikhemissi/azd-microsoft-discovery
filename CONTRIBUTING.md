@@ -84,6 +84,12 @@ claim or arbitrary percentage gate. Linux CI also validates:
 - Digest verification, strict agent readback, reconciliation, and recovery.
 - GA KB definition/index operation correlation, automatic/manual indexing,
   subscription overrides, ambiguous submissions, and export restoration without duplicate jobs.
+- Managed agent KB dependencies, service-returned attachment IDs, native
+  payload/readback, removal, indexed readiness and recovery without duplicate versions.
+- Generic data manifests, safe paths, no-write dry-runs, conditional Blob writes,
+  full SHA-256 readback, ownership-bound resume, and unchanged runtime-mount guidance.
+- Local manifest generation, read-only IaC asset parent/path/URI verification,
+  and agent handoff reports that never claim conversation attachment.
 - Commit-based version rules, annotated tags, stale-checkout guards, and draft recovery.
 
 Native offline tests build a scratch image without pulling a base image:
@@ -132,7 +138,21 @@ only the exact documented host exceptions; other mutations/output drift fail.
 - KB deployments index by default. Offline tests must never submit actual jobs.
   Bookshelves and storage registrations are GET-only prerequisites; source
   identities are omitted rather than inferred. GA KBs have no versions; keep
-  agent attachment blocked until its released contract is verified.
+  attachment IDs service-authored rather than inventing version paths.
+  Attachment uses top-level `knowledgeBases` on the existing exposed agent API,
+  not `foundryDetails.definition` or pass-through extensions. See the
+  [exposed agent model](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/discovery/Discovery.Workspace/_discovery_agent.tsp).
+  It is excluded from generated specs/SDKs; live GA identifier compatibility
+  remains unvalidated while Bookshelf quota prevents an end-to-end test.
+- Data writes require the explicit upload command and `--confirm`. Never put
+  uploads, asset registration, conversation attachment or simulation into
+  lifecycle hooks. See [data boundaries and sample integration](docs/data-bundles.md).
+- Discovery storage assets are ARM/IaC resources too. Resolve existing assets;
+  do not create them implicitly or add registration writes to data commands.
+- Preserve official-style code-environment, action and hybrid tools. Runtime
+  experiment selection is currently agent-mediated; do not claim deterministic
+  mount enforcement or require typed-action migration. Evaluate additional
+  runtime restrictions after collecting evidence from authorized experiments.
 
 ## Conventional Commits and automatic releases
 

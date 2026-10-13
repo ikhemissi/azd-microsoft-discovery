@@ -60,8 +60,29 @@ func ValidateAgentShape(definition map[string]any) error {
 		if !ok {
 			return errors.New("discoveryExtensions must be an object")
 		}
-		if _, exists := extensions["knowledgeBases"]; exists {
-			return errors.New("knowledge-base attachment is outside this iteration")
+		if raw, exists := extensions["knowledgeBases"]; exists {
+			bases, ok := raw.([]any)
+			if !ok || len(bases) > 32 {
+				return errors.New("knowledgeBases must be a bounded list of references")
+			}
+			seen := map[string]bool{}
+			for _, raw := range bases {
+				base, ok := raw.(map[string]any)
+				if !ok || len(base) != 1 {
+					return errors.New("knowledge-base references must contain only knowledgeBaseId")
+				}
+				id, ok := base["knowledgeBaseId"].(string)
+				if !ok {
+					return errors.New("knowledgeBaseId must be a scalar identifier")
+				}
+				if err := ValidateKnowledgeBaseID(id); err != nil {
+					return err
+				}
+				if seen[id] {
+					return errors.New("duplicate knowledge-base attachment identifier")
+				}
+				seen[id] = true
+			}
 		}
 		if raw, exists := extensions["humanInTheLoop"]; exists {
 			switch raw.(type) {
@@ -92,6 +113,14 @@ func ValidateAgentShape(definition map[string]any) error {
 func ValidateDeploymentName(value string) error {
 	if !deploymentName.MatchString(value) {
 		return errors.New("requires a deployment name, not an ARM ID, catalog path, or unresolved placeholder")
+	}
+	return nil
+}
+
+func ValidateKnowledgeBaseID(value string) error {
+	if value == "" || len(value) > 2048 || strings.ContainsAny(value, "?# \r\n\t") ||
+		strings.Contains(value, "${") || strings.Contains(value, "{{") {
+		return errors.New("knowledge-base attachment requires a nonempty bounded service-returned identifier")
 	}
 	return nil
 }
@@ -199,8 +228,19 @@ func validateAgent(project *Project, service *Service) error {
 	if err := ValidateAgentShape(definition); err != nil {
 		return err
 	}
-	if len(service.Agent.KnowledgeBases) > 0 {
-		return errors.New("knowledge-base attachment is outside this iteration")
+	seenBases := map[string]bool{}
+	for _, binding := range service.Agent.KnowledgeBases {
+		source := project.Services[binding.Service]
+		if source == nil || !slices.Contains(service.Uses, binding.Service) {
+			return errors.New("knowledge-base attachment service must exist and be declared in uses")
+		}
+		if source.Host != KnowledgeBaseHost || source.KnowledgeBase == nil {
+			return errors.New("knowledge-base attachments require discovery.knowledgebase service references")
+		}
+		if seenBases[binding.Service] {
+			return errors.New("duplicate knowledge-base attachment service")
+		}
+		seenBases[binding.Service] = true
 	}
 	if definition["kind"] != "prompt" {
 		return errors.New("only kind: prompt agent definitions are supported")
@@ -242,8 +282,8 @@ func validateAgent(project *Project, service *Service) error {
 				}
 			}
 		}
-		if _, exists := extensions["knowledgeBases"]; exists && len(service.Agent.KnowledgeBases) > 0 {
-			return errors.New("native and extension knowledge-base attachments cannot be combined")
+		if _, exists := extensions["knowledgeBases"]; exists {
+			return errors.New("declare managed KB services in config.knowledgeBases instead of authoring native attachment identifiers in agent.yaml")
 		}
 	}
 	for _, key := range sortedKeys(service.Agent.Bindings) {
