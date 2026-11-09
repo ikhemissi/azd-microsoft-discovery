@@ -1,7 +1,17 @@
+<div align="center">
+
 # Microsoft Discovery Community Extension for azd
 
-Build container images, register Microsoft Discovery tools, and deploy prompt
-agents and knowledge bases with the Azure Developer CLI.
+**Build container images, register Microsoft Discovery tools, and deploy prompt agents and knowledge bases with the Azure Developer CLI.**
+
+[![CI](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml/badge.svg)](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ikhemissi/azd-microsoft-discovery?style=flat-square)](https://github.com/ikhemissi/azd-microsoft-discovery/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square)](go.mod)
+
+[**Install**](#install-or-update) · [**Quick start**](#quick-start-gromacs-demo) · [**Configuration**](#configuration) · [**Commands**](#commands-and-recovery) · [**Scope and limitations**](#scope-and-limitations)
+
+</div>
 
 **Community-maintained, not officially supported by Microsoft.** Releases use
 normal `0.x` versions; configuration and behavior may change between releases.
@@ -21,6 +31,13 @@ Terraform owns infrastructure, identities, permissions, networking, and capacity
 Core azd handles dependencies through `uses`; no postdeploy hook is required.
 Deployment does not invoke agents, run simulations, grant roles, or scale compute.
 KB services index by default; set `autoindex: false` for configuration-only deployment.
+
+## Why this extension
+
+azd deploys an application's infrastructure and services with one `azd up`. With this extension, Microsoft Discovery
+tools, prompt agents and knowledge bases become azd services in `azure.yaml` too: Terraform provisions the
+infrastructure, then azd builds and publishes the tools' images, registers the tools, deploys the agents that use them
+and reconciles the knowledge bases, in dependency order.
 
 ## Install or update
 
@@ -232,6 +249,16 @@ record or blindly retry. A fresh command after completed work starts a new index
 startup and append text after failed JSON output. For strict local read-only
 diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
 
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Local builds, tests, standalone diagnostics, release automation |
+| [CHANGELOG.md](CHANGELOG.md) | Changes per release |
+| [docs/data-bundles.md](docs/data-bundles.md) | Reusable input bundles |
+| [examples/](examples) | Example applications: a GROMACS tool build, a knowledge base |
+| [schemas/discovery.schema.json](schemas/discovery.schema.json) | The JSON schema of the extension's configuration |
+
 ## Scope and limitations
 
 - Container tools, prompt agents, and GA KBs. Agent KB attachment, uploads, MCP/OpenAPI
@@ -258,3 +285,7 @@ For local builds, tests, release automation, and development artifacts, see
 | Later features | Friendly storage-source resolution, MCP/OpenAPI tools, uploads, remote diagnostics, GPU certification |
 
 No live KB mutations or indexing have been performed. CI stays Linux-only.
+
+## License
+
+[MIT](LICENSE)
