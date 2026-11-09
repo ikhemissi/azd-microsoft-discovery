@@ -255,7 +255,6 @@ diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
 |---|---|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Local builds, tests, standalone diagnostics, release automation |
 | [CHANGELOG.md](CHANGELOG.md) | Changes per release |
-| [docs/data-bundles.md](docs/data-bundles.md) | Reusable input bundles |
 | [examples/](examples) | Example applications: a GROMACS tool build, a knowledge base |
 | [schemas/discovery.schema.json](schemas/discovery.schema.json) | The JSON schema of the extension's configuration |
 
