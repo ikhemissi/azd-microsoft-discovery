@@ -245,10 +245,6 @@ or restore failed exports without another job. An ambiguous indexing POST is
 blocked pending inspection of remote operation history; do not delete its recovery
 record or blindly retry. A fresh command after completed work starts a new indexing run.
 
-**Diagnostic caveat:** azd 1.35.0 can repair environment metadata before extension
-startup and append text after failed JSON output. For strict local read-only
-diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
-
 ## Documentation
 
 | Document | What it covers |
