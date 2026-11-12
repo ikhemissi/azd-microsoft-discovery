@@ -276,8 +276,8 @@ diagnostics, see [standalone checks](CONTRIBUTING.md#standalone-diagnostics).
 - Linux CI and local tests cover azd 1.35.0 and Podman 4.9.3. A working live
   deployment has been reported, but this is not comprehensive cloud, GPU,
   platform, permission, or recovery certification.
-- Discovery adapters use tool/KB API `2026-06-01` and agent workspace API
-  `2026-02-01-preview`; the latter is an API version, not the extension's release status.
+- Discovery adapters use API version `2026-06-01` for tools, knowledge bases
+  and the agent workspace API, the same versions as Discovery Studio.
 
 For local builds, tests, release automation, and development artifacts, see
 [CONTRIBUTING.md](CONTRIBUTING.md). Changes are recorded in [CHANGELOG.md](CHANGELOG.md).

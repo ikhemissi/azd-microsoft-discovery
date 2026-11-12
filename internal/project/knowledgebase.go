@@ -88,7 +88,8 @@ func (p *Provider) verifiedKnowledgeBaseID(ctx context.Context, store *state.Sto
 		record.Outputs["knowledgeBaseId"] != remote.ID {
 		return "", errors.New("KB attachment identity differs from verified deployment outputs; refresh the KB deployment")
 	}
-	return remote.ID, nil
+	// Agents reference KBs by Bookshelf-qualified path; the Bookshelf-local ID is rejected.
+	return "/bookshelves/" + kb.BookshelfName + "/knowledgeBases/" + kb.Name, nil
 }
 
 // newIndexingRun reports whether run differs from the run recorded before submission.

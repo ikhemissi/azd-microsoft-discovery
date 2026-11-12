@@ -15,6 +15,9 @@ import (
 	"github.com/ikhemissi/azd-microsoft-discovery/internal/state"
 )
 
+// Agents reference KBs by Bookshelf-qualified path, as Studio writes them.
+const attachedKBID = "/bookshelves/literature/knowledgeBases/papers"
+
 func kbAgentFixture(t *testing.T, autoindex *bool) (*Provider, *config.Project, *knowledgeBaseCloud, *fakeCloud, *azdext.ServiceConfig) {
 	t.Helper()
 	provider, project, kbCloud := knowledgeBaseFixture(t, autoindex)
@@ -55,9 +58,15 @@ func TestAgentKBAttachmentLifecycleAndExplicitRemoval(t *testing.T) {
 		}
 	}
 	if agentCloud.posts != 1 || len(agentCloud.agent.KnowledgeBases) != 1 ||
-		agentCloud.agent.KnowledgeBases[0].KnowledgeBaseID != kbCloud.remote.ID ||
+		agentCloud.agent.KnowledgeBases[0].KnowledgeBaseID != attachedKBID ||
+		agentCloud.agent.KnowledgeBases[0].Name != "papers" ||
 		kbCloud.posts != 1 || kbCloud.patches != 1 {
 		t.Fatal("attachment changed server IDs, created duplicate agent versions or implicitly reindexed")
+	}
+	agentCloud.agent.KnowledgeBases[0].Name = ""
+	if _, err := provider.Deploy(t.Context(), sc, nil, nil, nil); err != nil || agentCloud.posts != 2 ||
+		agentCloud.agent.KnowledgeBases[0].Name != "papers" {
+		t.Fatalf("an attachment without its name was not repaired: %v", err)
 	}
 	if _, exists := project.Services["researcher"].Definition["discoveryExtensions"]; exists {
 		t.Fatal("attachment adaptation mutated the source agent definition")
@@ -78,8 +87,8 @@ func TestAgentKBAttachmentLifecycleAndExplicitRemoval(t *testing.T) {
 			if err := json.Unmarshal(content, &body); err != nil {
 				t.Fatal(err)
 			}
-			bases, exists := body["knowledgeBases"].([]any)
-			clearSeen = exists && len(bases) == 0
+			_, exists := body["knowledgeBases"]
+			clearSeen = !exists
 		}
 		return base.RoundTrip(request)
 	})
@@ -113,7 +122,7 @@ func TestAgentCanBindToolsAndKnowledgeBasesTogether(t *testing.T) {
 	}
 	tools := agentCloud.agent.Tools.([]any)
 	if len(tools) != 1 || tools[0].(map[string]any)["toolId"] != testScope+"/tools/demo-tool" ||
-		len(agentCloud.agent.KnowledgeBases) != 1 || agentCloud.agent.KnowledgeBases[0].KnowledgeBaseID != kbCloud.remote.ID {
+		len(agentCloud.agent.KnowledgeBases) != 1 || agentCloud.agent.KnowledgeBases[0].KnowledgeBaseID != attachedKBID {
 		t.Fatal("tool binding and KB attachment did not coexist in the native payload")
 	}
 }
@@ -219,7 +228,7 @@ func TestAgentKBAttachmentReadbackAndExportRecovery(t *testing.T) {
 					t.Fatal("mismatching pending agent submission created a duplicate version")
 				}
 				omitAttachment = false
-				agentCloud.agent.KnowledgeBases = []discovery.KnowledgeBaseReference{{KnowledgeBaseID: kbCloud.remote.ID}}
+				agentCloud.agent.KnowledgeBases = []discovery.KnowledgeBaseReference{{KnowledgeBaseID: attachedKBID}}
 			}
 			provider.deps.Export = func(context.Context, string, string) error { return nil }
 			if _, err := provider.Deploy(t.Context(), sc, nil, nil, nil); err != nil || agentCloud.posts != 1 || kbCloud.posts != 1 {
@@ -233,6 +242,7 @@ func TestMultipleAgentKBAttachmentsUseTheirConfiguredSubscriptionClients(t *test
 	provider, project, first, agentCloud, sc := kbAgentFixture(t, nil)
 	_, secondProject, second := knowledgeBaseFixture(t, nil)
 	second.kb.SubscriptionID = otherSubscription
+	second.kb.BookshelfName = "literature-two"
 	second.remote.ID = "second-service-returned-id"
 	secondService := secondProject.Services["literature"]
 	secondService.Name, secondService.Project = "other-literature", project.Root

@@ -20,7 +20,7 @@ import (
 )
 
 const ARMVersion = "2026-06-01"
-const AgentVersion = "2026-02-01-preview"
+const AgentVersion = "2026-06-01"
 const ARMEndpoint = "https://management.azure.com"
 const maxBody = 4 << 20
 

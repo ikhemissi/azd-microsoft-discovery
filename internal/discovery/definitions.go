@@ -129,7 +129,7 @@ func AgentDefinition(service *config.Service, outputs map[string]map[string]stri
 			if err := config.ValidateKnowledgeBaseID(id); err != nil {
 				return nil, fmt.Errorf("verified knowledge-base dependency output is unavailable; deploy and index service %q first: %w", binding.Service, err)
 			}
-			bases = append(bases, map[string]any{"knowledgeBaseId": id})
+			bases = append(bases, map[string]any{"knowledgeBaseId": id, "name": outputs[binding.Service]["name"]})
 		}
 		extensions["knowledgeBases"] = bases
 	}
@@ -138,6 +138,8 @@ func AgentDefinition(service *config.Service, outputs map[string]map[string]stri
 
 type KnowledgeBaseReference struct {
 	KnowledgeBaseID string `json:"knowledgeBaseId"`
+	// Studio resolves attachment details by name; without it they show as N/A.
+	Name string `json:"name,omitempty"`
 }
 
 type AgentPayload struct {
@@ -192,7 +194,8 @@ func Payload(definition map[string]any) (*AgentPayload, error) {
 			case "knowledgeBases":
 				for _, raw := range value.([]any) {
 					base := raw.(map[string]any)
-					payload.KnowledgeBases = append(payload.KnowledgeBases, KnowledgeBaseReference{KnowledgeBaseID: base["knowledgeBaseId"].(string)})
+					name, _ := base["name"].(string)
+					payload.KnowledgeBases = append(payload.KnowledgeBases, KnowledgeBaseReference{KnowledgeBaseID: base["knowledgeBaseId"].(string), Name: name})
 				}
 			default:
 				payload.DiscoveryExtensions[key] = value
@@ -225,16 +228,20 @@ func VerifyAgent(agent *Agent, expected *AgentPayload) error {
 	if len(agent.KnowledgeBases) != len(expected.KnowledgeBases) {
 		return errors.New("agent readback mismatch: knowledgeBases")
 	}
-	bases := map[string]bool{}
+	bases := map[string]string{}
 	for _, base := range agent.KnowledgeBases {
-		if base.KnowledgeBaseID == "" || bases[base.KnowledgeBaseID] {
+		if _, seen := bases[base.KnowledgeBaseID]; base.KnowledgeBaseID == "" || seen {
 			return errors.New("agent readback has missing or duplicate knowledge-base identifiers")
 		}
-		bases[base.KnowledgeBaseID] = true
+		bases[base.KnowledgeBaseID] = base.Name
 	}
 	for _, base := range expected.KnowledgeBases {
-		if !bases[base.KnowledgeBaseID] {
+		name, ok := bases[base.KnowledgeBaseID]
+		if !ok {
 			return errors.New("agent readback mismatch: knowledgeBases.knowledgeBaseId")
+		}
+		if base.Name != "" && name != base.Name {
+			return errors.New("agent readback mismatch: knowledgeBases.name")
 		}
 	}
 	for _, field := range []struct {

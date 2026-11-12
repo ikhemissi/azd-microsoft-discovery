@@ -68,8 +68,14 @@ func ValidateAgentShape(definition map[string]any) error {
 			seen := map[string]bool{}
 			for _, raw := range bases {
 				base, ok := raw.(map[string]any)
-				if !ok || len(base) != 1 {
-					return errors.New("knowledge-base references must contain only knowledgeBaseId")
+				if !ok {
+					return errors.New("knowledge-base references must be objects")
+				}
+				for key, value := range base {
+					_, isString := value.(string)
+					if (key != "knowledgeBaseId" && key != "name") || (key == "name" && !isString) {
+						return errors.New("knowledge-base references must contain only knowledgeBaseId and an optional name")
+					}
 				}
 				id, ok := base["knowledgeBaseId"].(string)
 				if !ok {

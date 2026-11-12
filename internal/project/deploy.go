@@ -384,7 +384,8 @@ func (p *Provider) bindingOutputs(ctx context.Context, client *discovery.Client,
 		if err != nil {
 			return nil, fmt.Errorf("knowledge-base dependency %q: %w", binding.Service, err)
 		}
-		outputs[binding.Service] = map[string]string{"knowledgeBaseId": id}
+		outputs[binding.Service] = map[string]string{"knowledgeBaseId": id,
+			"name": project.Services[binding.Service].KnowledgeBase.Name}
 	}
 	return outputs, nil
 }
@@ -480,17 +481,8 @@ func (p *Provider) deployAgent(ctx context.Context, client *discovery.Client, st
 		}
 		upsert := client.WorkspaceEndpoint + "/projects/" + url.PathEscape(id.Name) +
 			":upsertAgent?api-version=" + discovery.AgentVersion
-		body := struct {
-			*discovery.AgentPayload
-			KnowledgeBases *[]discovery.KnowledgeBaseReference `json:"knowledgeBases,omitempty"`
-		}{AgentPayload: payload}
-		if len(payload.KnowledgeBases) > 0 {
-			body.KnowledgeBases = &payload.KnowledgeBases
-		} else if agent != nil && len(agent.KnowledgeBases) > 0 {
-			empty := []discovery.KnowledgeBaseReference{}
-			body.KnowledgeBases = &empty
-		}
-		response, err := client.Request(ctx, http.MethodPost, upsert, body)
+		// Upsert replaces the agent; omitting knowledgeBases detaches all, as Studio does.
+		response, err := client.Request(ctx, http.MethodPost, upsert, payload)
 		if err != nil {
 			var rejection *discovery.HTTPError
 			if errors.As(err, &rejection) && rejection.Rejected() {
