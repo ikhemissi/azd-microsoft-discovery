@@ -60,6 +60,15 @@ func parseKnowledgeBase(service *Service, value any, lookup Lookup, deferred boo
 	}
 	seen := map[string]bool{}
 	for _, source := range kb.Sources {
+		identity := source.UserAssignedIdentityResourceID
+		if identity == "" {
+			return errors.New("KB source requires userAssignedIdentityResourceId, one of the Bookshelf workload identities")
+		}
+		if !(deferred && variable.FindString(identity) == identity) {
+			if _, err := resource(identity, "Microsoft.ManagedIdentity/userAssignedIdentities"); err != nil {
+				return fmt.Errorf("KB source userAssignedIdentityResourceId: %w", err)
+			}
+		}
 		if deferred && variable.FindString(source.StorageAssetResourceID) == source.StorageAssetResourceID {
 			continue
 		}

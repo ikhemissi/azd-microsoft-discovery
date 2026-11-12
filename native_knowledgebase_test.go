@@ -33,6 +33,7 @@ services:
       bookshelfName: ${BOOKSHELF}
       sources:
         - storageAssetResourceId: ${ASSET}
+          userAssignedIdentityResourceId: ${IDENTITY}
   researcher:
     host: discovery.agent
     uses: [literature]
@@ -67,7 +68,8 @@ services:
 	scope := strings.TrimSuffix(nativeWorkspace, "/workspaces/demo")
 	values := "AZURE_ENV_NAME=\"demo\"\nAZURE_SUBSCRIPTION_ID=\"00000000-0000-0000-0000-000000000001\"\n" +
 		"AZURE_RESOURCE_GROUP=\"demo\"\nWORKSPACE=\"" + nativeWorkspace + "\"\nPROJECT=\"" + nativeWorkspace +
-		"/projects/research\"\nBOOKSHELF=\"literature\"\nASSET=\"" + scope + "/storageContainers/data/storageAssets/papers\"\nMODEL_NAME=\"chat\"\n"
+		"/projects/research\"\nBOOKSHELF=\"literature\"\nASSET=\"" + scope + "/storageContainers/data/storageAssets/papers\"\nMODEL_NAME=\"chat\"\n" +
+		"IDENTITY=\"/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/reader\"\n"
 	if err := os.WriteFile(filepath.Join(root, ".azure/demo/.env"), []byte(values), 0600); err != nil {
 		t.Fatal(err)
 	}

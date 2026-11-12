@@ -70,7 +70,8 @@ type KnowledgeBase struct {
 }
 
 type KnowledgeBaseSource struct {
-	StorageAssetResourceID string `json:"storageAssetResourceId"`
+	StorageAssetResourceID         string `json:"storageAssetResourceId"`
+	UserAssignedIdentityResourceID string `json:"userAssignedIdentityResourceId"`
 }
 
 type Image struct {

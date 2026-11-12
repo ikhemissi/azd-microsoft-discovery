@@ -165,8 +165,11 @@
           "type": "array", "minItems": 1, "uniqueItems": true,
           "items": {
             "type": "object", "additionalProperties": false,
-            "required": ["storageAssetResourceId"],
-            "properties": { "storageAssetResourceId": { "type": "string", "minLength": 1 } }
+            "required": ["storageAssetResourceId", "userAssignedIdentityResourceId"],
+            "properties": {
+              "storageAssetResourceId": { "type": "string", "minLength": 1 },
+              "userAssignedIdentityResourceId": { "type": "string", "minLength": 1, "description": "User-assigned managed identity that reads the storage asset; must be one of the Bookshelf workload identities." }
+            }
           }
         }
       }

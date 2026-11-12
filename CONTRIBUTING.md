@@ -136,8 +136,9 @@ only the exact documented host exceptions; other mutations/output drift fail.
   Agent invocation, simulations, indexing, uploads, role grants, and scaling
   require separate consideration; do not hide them in deployment tests.
 - KB deployments index by default. Offline tests must never submit actual jobs.
-  Bookshelves and storage registrations are GET-only prerequisites; source
-  identities are omitted rather than inferred. GA KBs have no versions; keep
+  Bookshelves and storage registrations are GET-only prerequisites; each source
+  identity is declared explicitly and checked against the Bookshelf's workload
+  identities, never inferred. GA KBs have no versions; keep
   attachment IDs service-authored rather than inventing version paths.
   Attachment uses top-level `knowledgeBases` on the existing exposed agent API,
   not `foundryDetails.definition` or pass-through extensions. See the

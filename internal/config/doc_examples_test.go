@@ -33,6 +33,7 @@ func documentValues(name string) (string, bool) {
 		"DISCOVERY_TOOL_IMAGE_DIGEST":          "example.azurecr.io/tool@sha256:" + strings.Repeat("a", 64),
 		"DISCOVERY_BOOKSHELF_NAME":             "literature",
 		"DISCOVERY_PAPERS_ASSET_ID":            scope + "/storageContainers/data/storageAssets/papers",
+		"DISCOVERY_MANAGED_IDENTITY_ID":        identityScope + "/userAssignedIdentities/reader",
 		"AZURE_SUBSCRIPTION_ID":                "00000000-0000-0000-0000-000000000001",
 		"AZURE_RESOURCE_GROUP":                 "demo",
 		"DISCOVERY_STORAGE_CONTAINER_ID":       scope + "/storageContainers/inputs",

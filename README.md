@@ -173,12 +173,17 @@ literature:
     bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
     sources:
       - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+        userAssignedIdentityResourceId: ${DISCOVERY_MANAGED_IDENTITY_ID}
     autoindex: true
 ```
 
 - Terraform owns the Bookshelf, storage-container/asset registrations, access,
   and optional compute. Sources are **existing Discovery storage-asset ARM IDs**,
   not local folders or Blob URLs; this extension does not upload/register them.
+- Each source needs `userAssignedIdentityResourceId`: a user-assigned managed
+  identity that is one of the Bookshelf's workload identities and can read the
+  asset's Blob data. The Bookshelf rejects sources without it; deployment checks
+  it against the Bookshelf readback before sending the request.
 - Bookshelf lookup defaults to selected `AZURE_SUBSCRIPTION_ID` and
   `AZURE_RESOURCE_GROUP`. Override with `config.subscriptionId` / `resourceGroup`;
   credentials use that subscription's tenant.
@@ -191,7 +196,7 @@ literature:
   falling back to `discovery.nodePoolResourceId`. If neither pool is configured,
   omit it in the API request; do not infer/create/scale compute. Indexing can incur costs.
 - Manual indexing requires an existing KB whose definition matches configuration;
-  deploy definition changes first. Optional source identities are omitted.
+  deploy definition changes first.
 - GA KBs have no versions. In the development build, attach a managed KB with
   `config.knowledgeBases: [{service: literature}]` on the agent and include
   `literature` in its `uses`. See the [complete agent + KB example](examples/knowledgebase/azure.yaml)

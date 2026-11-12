@@ -21,7 +21,8 @@ const BookshelfVersion = "2026-06-01"
 var knowledgeBaseName = regexp.MustCompile(`^[A-Za-z0-9-]{1,24}$`)
 
 type StorageAssetReference struct {
-	ID string `json:"id"`
+	ID                   string `json:"id"`
+	UserAssignedIdentity string `json:"userAssignedIdentity,omitempty"`
 }
 
 type KnowledgeBaseDefinition struct {
@@ -41,8 +42,21 @@ type KnowledgeBase struct {
 }
 
 type IndexingRun struct {
-	RunID  string `json:"runId"`
-	Status string `json:"status"`
+	RunID   string           `json:"runId"`
+	Status  string           `json:"status"`
+	Metrics *IndexingMetrics `json:"indexingMetrics,omitempty"`
+}
+
+type IndexingMetrics struct {
+	IndexingEndTimeUTC string `json:"indexingEndTimeUtc,omitempty"`
+}
+
+// EndTime distinguishes runs because the Bookshelf reuses one run ID per knowledge base.
+func (r *IndexingRun) EndTime() string {
+	if r == nil || r.Metrics == nil {
+		return ""
+	}
+	return r.Metrics.IndexingEndTimeUTC
 }
 
 type IndexingRequest struct {
@@ -76,6 +90,7 @@ func (c *Client) ResolveBookshelfByName(ctx context.Context, subscription, resou
 // returned by ARM, not a hostname constructed from the user's Bookshelf name.
 func (c *Client) ResolveBookshelf(ctx context.Context, resourceID string) (*Resource, error) {
 	c.bookshelfEndpoint = ""
+	c.bookshelfIdentities = nil
 	if strings.ContainsAny(resourceID, "?# \r\n\t") {
 		return nil, errors.New("invalid Bookshelf ARM ID")
 	}
@@ -98,6 +113,10 @@ func (c *Client) ResolveBookshelf(ctx context.Context, resourceID string) (*Reso
 		return nil, errors.New("Bookshelf readback has no trusted public-cloud data-plane URI")
 	}
 	c.bookshelfEndpoint = strings.TrimSuffix(endpoint.String(), "/")
+	c.bookshelfIdentities = map[string]bool{}
+	for identity := range book.Properties.WorkloadIdentities {
+		c.bookshelfIdentities[strings.ToLower(identity)] = true
+	}
 	return book, nil
 }
 
@@ -157,19 +176,24 @@ func VerifyKnowledgeBase(resource *KnowledgeBase, expected KnowledgeBaseDefiniti
 		return errors.New("knowledge-base readback mismatch: copilotInstruction")
 	}
 	// Source order is not semantically meaningful; duplicates are never accepted.
-	actual := map[string]bool{}
+	actual := map[string]string{}
 	for _, reference := range resource.StorageAssetReferences {
-		if actual[strings.ToLower(reference.ID)] {
+		key := strings.ToLower(reference.ID)
+		if _, exists := actual[key]; exists {
 			return errors.New("knowledge-base readback has duplicate storageAssetReferences")
 		}
-		actual[strings.ToLower(reference.ID)] = true
+		actual[key] = strings.ToLower(reference.UserAssignedIdentity)
 	}
 	if len(actual) != len(expected.StorageAssetReferences) {
 		return errors.New("knowledge-base readback mismatch: storageAssetReferences")
 	}
 	for _, reference := range expected.StorageAssetReferences {
-		if !actual[strings.ToLower(reference.ID)] {
+		identity, exists := actual[strings.ToLower(reference.ID)]
+		if !exists {
 			return errors.New("knowledge-base readback mismatch: storageAssetReferences")
+		}
+		if identity != strings.ToLower(reference.UserAssignedIdentity) {
+			return errors.New("knowledge-base readback mismatch: storageAssetReferences userAssignedIdentity")
 		}
 	}
 	return nil
@@ -195,11 +219,33 @@ func (c *Client) ValidateKnowledgeBaseSources(ctx context.Context, definition Kn
 			return errors.New("duplicate KB source storage asset")
 		}
 		seen[key] = true
+		if err := c.validateSourceIdentity(reference.UserAssignedIdentity); err != nil {
+			return err
+		}
 	}
 	for _, reference := range definition.StorageAssetReferences {
 		if _, err := c.Ready(ctx, reference.ID); err != nil {
 			return fmt.Errorf("knowledge-base source prerequisite: %w", err)
 		}
+	}
+	return nil
+}
+
+// The Bookshelf service requires each source identity to be one of its workload identities.
+func (c *Client) validateSourceIdentity(identity string) error {
+	if c.bookshelfIdentities == nil {
+		return errors.New("resolve and verify the Bookshelf before validating knowledge-base sources")
+	}
+	if strings.ContainsAny(identity, "?# \r\n\t") {
+		return errors.New("invalid KB source userAssignedIdentity ARM ID")
+	}
+	id, err := arm.ParseResourceID(identity)
+	if err != nil || !strings.EqualFold(id.ResourceType.String(), "Microsoft.ManagedIdentity/userAssignedIdentities") ||
+		id.SubscriptionID == "" || id.ResourceGroupName == "" {
+		return errors.New("KB source requires userAssignedIdentityResourceId set to a user-assigned managed identity ARM ID")
+	}
+	if !c.bookshelfIdentities[strings.ToLower(identity)] {
+		return errors.New("KB source userAssignedIdentityResourceId must be one of the Bookshelf workload identities")
 	}
 	return nil
 }
@@ -232,7 +278,26 @@ func (c *Client) ReconcileKnowledgeBase(ctx context.Context, name, bookshelf str
 	if err == nil && operation != "" {
 		err = c.ValidateBookshelfOperationURL(operation)
 	}
+	if err == nil && c.IsKnowledgeBaseURL(name, operation) {
+		return "", nil
+	}
 	return operation, err
+}
+
+// IsKnowledgeBaseURL reports whether address is the KB resource itself. The
+// Bookshelf may return it as Operation-Location; its top-level status is the
+// indexing status, so readiness must come from provisioningState instead.
+func (c *Client) IsKnowledgeBaseURL(name, address string) bool {
+	if address == "" || c.bookshelfEndpoint == "" {
+		return false
+	}
+	u, err := url.Parse(address)
+	base, baseErr := url.Parse(c.bookshelfEndpoint)
+	if err != nil || baseErr != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, base.Host) &&
+		strings.EqualFold(strings.TrimSuffix(u.Path, "/"), "/knowledgeBases/"+name)
 }
 
 func (c *Client) ValidateBookshelfOperationURL(address string) error {
@@ -312,7 +377,9 @@ func (c *Client) StartKnowledgeBaseIndexing(ctx context.Context, name string, re
 	if err := c.ValidateKnowledgeBaseOperationURL(name, operation); err != nil {
 		return "", "", err
 	}
-	if path.Base(operationURL.Path) != acknowledgement.ID {
+	operationID := path.Base(operationURL.Path)
+	// Live 2026-06-01 replies carry the KB ID as id and the run ID as the operation ID.
+	if operationID != acknowledgement.ID && (acknowledgement.Result == nil || operationID != acknowledgement.Result.RunID) {
 		return "", "", errors.New("indexing acknowledgement/operation URL ID mismatch; submission may have succeeded")
 	}
 	runID := ""

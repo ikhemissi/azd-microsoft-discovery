@@ -47,6 +47,7 @@ services:
       description: Reviewed scientific methods and protocol documents.
       sources:
         - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+          userAssignedIdentityResourceId: ${DISCOVERY_MANAGED_IDENTITY_ID}
       autoindex: true
   researcher:
     host: discovery.agent

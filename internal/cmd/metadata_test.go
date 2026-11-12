@@ -53,7 +53,7 @@ func TestMetadataSurvivesSDKCacheRoundtrip(t *testing.T) {
 			t.Fatal("metadata accepted an unverified literal KB attachment")
 		}
 		if err := extensions.ValidateAgainstSchema(schema.Service, map[string]any{
-			"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${ASSET}"}}}); err != nil {
+			"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${ASSET}", "userAssignedIdentityResourceId": "${IDENTITY}"}}}); err != nil {
 			t.Fatalf("KB metadata/default inputs did not survive caching: %v", err)
 		}
 		if err := extensions.ValidateAgainstSchema(schema.Project, map[string]any{

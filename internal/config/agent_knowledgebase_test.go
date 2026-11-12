@@ -10,7 +10,7 @@ func agentKnowledgeBaseDocument(t *testing.T, root string) map[string]any {
 	document := agentDocument(t, root)
 	document["services"].(map[string]any)["literature"] = map[string]any{
 		"host":   KnowledgeBaseHost,
-		"config": map[string]any{"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${PAPERS}"}}},
+		"config": map[string]any{"bookshelfName": "${BOOKSHELF}", "sources": []any{map[string]any{"storageAssetResourceId": "${PAPERS}", "userAssignedIdentityResourceId": "${IDENTITY}"}}},
 	}
 	agent := document["services"].(map[string]any)["agent"].(map[string]any)
 	agent["uses"] = []any{"literature"}
@@ -21,6 +21,7 @@ func agentKnowledgeBaseDocument(t *testing.T, root string) map[string]any {
 func attachmentValues(name string) (string, bool) {
 	values := map[string]string{
 		"BOOKSHELF": "literature", "PAPERS": scope + "/storageContainers/data/storageAssets/papers",
+		"IDENTITY":              identityScope + "/userAssignedIdentities/reader",
 		"AZURE_SUBSCRIPTION_ID": "00000000-0000-0000-0000-000000000001", "AZURE_RESOURCE_GROUP": "demo",
 	}
 	value, exists := values[name]

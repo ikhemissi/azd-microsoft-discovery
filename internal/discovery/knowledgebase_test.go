@@ -12,11 +12,12 @@ import (
 const kbScope = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.Discovery"
 const bookshelfID = kbScope + "/bookshelves/literature"
 const assetID = kbScope + "/storageContainers/data/storageAssets/papers"
+const identityID = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/reader"
 
 func kbFixture(t *testing.T) (*Client, *KnowledgeBase, *int, *int) {
 	t.Helper()
 	definition := KnowledgeBaseDefinition{
-		StorageAssetReferences: []StorageAssetReference{{ID: assetID}},
+		StorageAssetReferences: []StorageAssetReference{{ID: assetID, UserAssignedIdentity: identityID}},
 		Description:            "Scientific papers", CopilotInstruction: "Ground answers in these papers.",
 	}
 	remote := &KnowledgeBase{KnowledgeBaseDefinition: definition,
@@ -38,7 +39,7 @@ func kbFixture(t *testing.T) (*Client, *KnowledgeBase, *int, *int) {
 			}
 			body = map[string]any{"id": bookshelfID, "name": "literature", "properties": map[string]any{
 				"provisioningState": "Succeeded", "bookshelfUri": "https://literature.discovery.azure.com",
-				"workloadIdentities": map[string]any{"identity-one": nil, "identity-two": nil},
+				"workloadIdentities": map[string]any{identityID: map[string]any{}, strings.Replace(identityID, "reader", "other", 1): map[string]any{}},
 			}}
 		case assetID:
 			if request.Method != http.MethodGet {
@@ -57,8 +58,8 @@ func kbFixture(t *testing.T) (*Client, *KnowledgeBase, *int, *int) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(string(encoded), "userAssignedIdentity") || strings.Contains(string(encoded), "version") {
-					t.Fatal("optional identity or KB version was invented")
+				if !strings.Contains(string(encoded), `"userAssignedIdentity":"`+identityID+`"`) || strings.Contains(string(encoded), "version") {
+					t.Fatal("source identity was not sent or a KB version was invented")
 				}
 				if err := json.Unmarshal(encoded, &remote.KnowledgeBaseDefinition); err != nil {
 					t.Fatal(err)
@@ -136,15 +137,31 @@ func TestKnowledgeBaseSourceAndEndpointGuards(t *testing.T) {
 	}
 	for _, id := range []string{"https://storage.blob.core.windows.net/papers", "./local-folder", kbScope + "/storageContainers/data", assetID + "?extra"} {
 		desired := remote.KnowledgeBaseDefinition
-		desired.StorageAssetReferences = []StorageAssetReference{{ID: id}}
+		desired.StorageAssetReferences = []StorageAssetReference{{ID: id, UserAssignedIdentity: identityID}}
 		if err := client.ValidateKnowledgeBaseSources(t.Context(), desired); err == nil {
 			t.Fatalf("invalid source accepted: %s", id)
 		}
 	}
 	desired := remote.KnowledgeBaseDefinition
-	desired.StorageAssetReferences = []StorageAssetReference{{ID: assetID}, {ID: strings.ToUpper(assetID)}}
+	desired.StorageAssetReferences = []StorageAssetReference{{ID: assetID, UserAssignedIdentity: identityID}, {ID: strings.ToUpper(assetID), UserAssignedIdentity: identityID}}
 	if err := client.ValidateKnowledgeBaseSources(t.Context(), desired); err == nil {
 		t.Fatal("duplicate ARM sources accepted")
+	}
+	foreign := strings.Replace(identityID, "reader", "foreign", 1)
+	for _, identity := range []string{"", "reader", assetID, identityID + "?x", foreign} {
+		desired.StorageAssetReferences = []StorageAssetReference{{ID: assetID, UserAssignedIdentity: identity}}
+		if err := client.ValidateKnowledgeBaseSources(t.Context(), desired); err == nil {
+			t.Fatalf("invalid or non-workload source identity accepted: %q", identity)
+		}
+	}
+	desired.StorageAssetReferences = []StorageAssetReference{{ID: assetID, UserAssignedIdentity: strings.ToUpper(identityID)}}
+	if err := client.ValidateKnowledgeBaseSources(t.Context(), desired); err != nil {
+		t.Fatalf("case-insensitive workload identity rejected: %v", err)
+	}
+	drifted := *remote
+	drifted.StorageAssetReferences = []StorageAssetReference{{ID: assetID, UserAssignedIdentity: foreign}}
+	if err := VerifyKnowledgeBase(&drifted, remote.KnowledgeBaseDefinition); err == nil {
+		t.Fatal("source identity drift accepted")
 	}
 	for _, destination := range []string{"https://evil.invalid/operations/op", ARMEndpoint + "/operations/op"} {
 		if _, err := client.PollKnowledgeBaseIndexing(t.Context(), destination); err == nil {
