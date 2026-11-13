@@ -37,7 +37,8 @@ use for the rest of Azure.
 ## Install
 
 Requires **azd ≥ 1.35.0**. Releases include Linux, macOS and Windows binaries
-for amd64 and arm64; CI tests Linux amd64. No Go or repository clone needed.
+for amd64 and arm64. CI fully tests Linux amd64 and runs read-only smoke tests on
+macOS (arm64, Intel) and Windows amd64. No Go or repository clone needed.
 
 ```sh
 VERSION=0.4.0

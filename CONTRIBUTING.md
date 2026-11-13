@@ -206,6 +206,8 @@ commit/tag, rerun at that release commit while it is still current `main`.
 The workflow can rebuild/test and finish an unpublished draft; only draft assets
 may be replaced. Published releases remain unchanged.
 
-Releases build Linux, macOS and Windows binaries for amd64 and arm64, but CI
-runs only on Linux amd64. Testing on other platforms and a custom azd registry
-are separate follow-up work, not prerequisites for this flow.
+Releases build Linux, macOS and Windows binaries for amd64 and arm64. CI runs
+the full suite on Linux amd64; on macOS (arm64, Intel) and Windows amd64 it installs
+the tested bundle with azd 1.35.0 and runs the native read-only commands.
+Deployments, container builds and linux/arm64 and windows/arm64 are not tested.
+A custom azd registry is separate follow-up work, not a prerequisite for this flow.

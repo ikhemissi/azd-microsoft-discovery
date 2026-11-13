@@ -84,3 +84,52 @@ jobs:
             artifacts/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
+
+  cross-platform:
+    needs: native
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            azd: darwin-arm64
+          - runner: macos-15-intel
+            azd: darwin-amd64
+          - runner: windows-latest
+            azd: windows-amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      AZD_COLLECT_TELEMETRY: "no"
+      AZD_DISCOVERY_NATIVE_TESTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: discovery-bundle
+          path: artifacts
+      - name: Install minimum azd host
+        run: |
+          echo "AZD_CONFIG_DIR=$RUNNER_TEMP/discovery-azd" >> "$GITHUB_ENV"
+          curl --fail --location --retry 3 \
+            "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.35.0/azd-${{ matrix.azd }}.zip" \
+            --output "$RUNNER_TEMP/azd.zip"
+          python -m zipfile -e "$RUNNER_TEMP/azd.zip" "$RUNNER_TEMP/azd-minimum"
+          suffix=""
+          if [[ "$RUNNER_OS" == Windows ]]; then suffix=.exe; fi
+          mv "$RUNNER_TEMP/azd-minimum/azd-${{ matrix.azd }}$suffix" "$RUNNER_TEMP/azd-minimum/azd$suffix"
+          chmod +x "$RUNNER_TEMP/azd-minimum/azd$suffix"
+          echo "$RUNNER_TEMP/azd-minimum" >> "$GITHUB_PATH"
+      - name: Install the tested bundle and run read-only commands
+        run: |
+          azd version
+          (cd artifacts && if command -v sha256sum >/dev/null; then sha256sum --check SHA256SUMS; else shasum -a 256 --check SHA256SUMS; fi)
+          azd extension install artifacts/ikhemissi-azd-discovery_*.zip --force
+          azd discovery version --output json
+          go test -count=1 -v -run '^Test(Native|Standalone)ReadOnlyCommands$' .
