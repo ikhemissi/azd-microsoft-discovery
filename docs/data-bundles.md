@@ -1,7 +1,6 @@
 # Reusable tools and explicit input bundles
 
-**Data commands are unreleased.** Install a [development bundle](../CONTRIBUTING.md#build-and-install-a-development-bundle);
-published version 0.3.0 includes KB support, but not these commands.
+Data commands are available from version 0.4.0.
 
 ## Supported behavior and boundaries
 
@@ -286,12 +285,8 @@ describes explicit task `storageAssetIds`, parent/dependency inheritance, and
 per-conversation isolation. An ARM asset existing in a project is not automatic
 attachment. A raw Blob upload is not asset registration.
 
-Programmatic task/conversation attachment remains unimplemented. Use the
-supported platform attachment flow with the reported asset ID. Studio
-documentation also differs on local-file upload availability: the
-Studio overview describes project uploads, while the storage-asset guide lists
-local upload as unsupported. Do not rely on either as proof of an automatic
-upload-to-conversation path.
+Programmatic task/conversation attachment is not implemented yet. Use the
+supported platform attachment flow with the reported asset ID.
 
 For example, after attaching experiment A to the chosen agent's conversation:
 
@@ -356,7 +351,7 @@ attachment and retrieval are live-validated.
 | `infra/storage.tf` | Add/reuse a dedicated existing input Blob container under the registered data account. Do not confuse it with `discoveryoutputs` or Terraform state storage. |
 | `infra/outputs.tf` | Export `DISCOVERY_INPUT_BLOB_CONTAINER_ID` from that container's ARM ID; retain `DISCOVERY_STORAGE_CONTAINER_ID`. Create/reuse IaC-owned directory assets with the exact container/prefix/version path and export their IDs as `DISCOVERY_EXPERIMENT_A_ASSET_ID` / `DISCOVERY_EXPERIMENT_B_ASSET_ID`. |
 | `infra/identity.tf` | Review uploader read/write access on the input container. Current optional provisioner data role targets the output container only. Platform identities already have account-level roles, but input access/networking still require validation. Roles remain Terraform-owned. |
-| `azure.yaml` | Install a development release containing data commands, add the declarations above, and retain existing tool/agent services. Data directories must not become image build inputs or deployment hooks. |
+| `azure.yaml` | Install version 0.4.0 or later, add the declarations above, and retain existing tool/agent services. Data directories must not become image build inputs or deployment hooks. |
 | `tools/gromacs/run.sh` | No redesign required for initial supported baseline experiments: it already reads mounted MDPs/structures. Keep its existing protocol restrictions; generalization to other science is separate sample work, not required by the extension. |
 | `tools/gromacs/Dockerfile` and GPU variant | Reuse the existing image and packaged runner for supported experiments. Changing mounted inputs does not require a rebuild; changing packaged runner/software does. Do not change compute mode implicitly. |
 | `tools/gromacs/test.sh` | Retain existing checks. Add observations from the two-bundle exercise without putting cloud simulations in default tests. |
