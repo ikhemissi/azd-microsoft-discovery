@@ -3,7 +3,7 @@
 [![CI](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml/badge.svg)](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ikhemissi/azd-microsoft-discovery)](https://github.com/ikhemissi/azd-microsoft-discovery/releases)
 [![azd](https://img.shields.io/badge/azd-%E2%89%A5%201.35.0-0078D4)](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
-[![Platform](https://img.shields.io/badge/platform-linux%2Famd64-lightgrey)](#install)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Deploy Microsoft Discovery tools, prompt agents and Bookshelf knowledge bases
@@ -36,7 +36,9 @@ use for the rest of Azure.
 
 ## Install
 
-Requires **azd ≥ 1.35.0** on **Linux amd64**. No Go or repository clone needed.
+Requires **azd ≥ 1.35.0**. Releases include Linux, macOS and Windows binaries
+for amd64 and arm64. CI fully tests Linux amd64 and runs read-only smoke tests on
+macOS (arm64, Intel) and Windows amd64. No Go or repository clone needed.
 
 ```sh
 VERSION=0.4.0
@@ -49,7 +51,7 @@ azd discovery version
   `azd extension update`). Add `--force` to replace an installed build.
 - Use the same `AZD_CONFIG_DIR` for installation and your project commands.
 - Each [release](https://github.com/ikhemissi/azd-microsoft-discovery/releases)
-  includes `SHA256SUMS`.
+  includes the bundle, the per-platform archives and `SHA256SUMS`.
 
 ## Quick start
 
@@ -241,7 +243,7 @@ Not implemented yet; candidates for future releases:
 - Azure readiness checks in `doctor` (authentication, RBAC, registry, networking).
 - Programmatic attachment of input assets to conversations, and stronger
   runtime input bindings, guided by results from real experiments.
-- Platforms beyond Linux amd64.
+- Testing on platforms beyond Linux amd64.
 
 Development, testing and releases: [CONTRIBUTING.md](CONTRIBUTING.md).
 Changes: [CHANGELOG.md](CHANGELOG.md).

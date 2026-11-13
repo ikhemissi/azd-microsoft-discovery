@@ -74,16 +74,22 @@ if ! $resume; then
   git push --atomic origin HEAD:main "$tag"
 fi
 (cd artifacts && sha256sum --check SHA256SUMS)
-bundle="$PWD/artifacts/ikhemissi-azd-discovery_${version}.zip"
+bundle="ikhemissi-azd-discovery_${version}.zip"
+mapfile -t assets < <(cut -d' ' -f3- artifacts/SHA256SUMS)
+if ! printf '%s\n' "${assets[@]}" | grep -qxF "$bundle"; then
+  echo "SHA256SUMS does not list $bundle." >&2
+  exit 1
+fi
+assets=("${assets[@]/#/artifacts/}" artifacts/SHA256SUMS)
 draft="$(jq -r --arg tag "$tag" '.[] | select(.tagName == $tag and .isDraft == true) | .tagName' <<< "$releases")"
 if [[ -n "$draft" ]]; then
   if ! $resume; then
     echo "Existing draft is not associated with a resumable release commit." >&2
     exit 1
   fi
-  gh release upload "$tag" "$bundle" artifacts/SHA256SUMS --repo "$GH_REPO" --clobber
+  gh release upload "$tag" "${assets[@]}" --repo "$GH_REPO" --clobber
   gh release edit "$tag" --repo "$GH_REPO" --draft=false --notes-file "$notes" --latest
 else
-  gh release create "$tag" "$bundle" artifacts/SHA256SUMS --repo "$GH_REPO" \
+  gh release create "$tag" "${assets[@]}" --repo "$GH_REPO" \
     --verify-tag --title "$tag" --notes-file "$notes" --latest
 fi

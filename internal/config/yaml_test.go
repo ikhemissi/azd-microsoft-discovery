@@ -26,6 +26,25 @@ func TestUnsafeYAML(t *testing.T) {
 	}
 }
 
+func TestPathWithinSymlinkedRoot(t *testing.T) {
+	parent := t.TempDir()
+	real := filepath.Join(parent, "real")
+	if err := os.MkdirAll(filepath.Join(real, "project"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(parent, "link")); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	root := filepath.Join(parent, "link", "project")
+	writeFile(t, root, "inside.yaml", "name: inside")
+	if _, err := ResolvePath(root, root, "inside.yaml"); err != nil {
+		t.Fatalf("path inside a symlinked project root was rejected: %v", err)
+	}
+	if _, err := ResolvePath(root, root, "../../real"); err == nil {
+		t.Fatal("escape from a symlinked project root accepted")
+	}
+}
+
 func TestPathEscapes(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "project")

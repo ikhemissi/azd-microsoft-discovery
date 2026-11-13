@@ -98,7 +98,12 @@ func ResolvePath(root, base, path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve definition/project path: %w", err)
 	}
-	relative, err := filepath.Rel(root, resolved)
+	// Resolve the root too: macOS temp dirs (/var -> /private/var) and Windows 8.3 names differ otherwise.
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve azd project root: %w", err)
+	}
+	relative, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", errors.New("definition/project path escapes the azd project root")
 	}

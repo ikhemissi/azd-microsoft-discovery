@@ -152,6 +152,9 @@ func TestPreparationRejectsUnsafeInputsBeforeWritingManifest(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "case collision":
+				if _, err := os.Stat(filepath.Join(project.Root, "inputs", "EXPERIMENT.json")); err == nil {
+					t.Skip("case collisions cannot exist on a case-insensitive file system")
+				}
 				if err := os.WriteFile(filepath.Join(project.Root, "inputs", "EXPERIMENT.json"), []byte("other"), 0600); err != nil {
 					t.Fatal(err)
 				}

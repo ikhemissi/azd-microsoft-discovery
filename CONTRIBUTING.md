@@ -37,7 +37,7 @@ From the extension repository root:
 
 ```sh
 azd extension install microsoft.azd.extensions --version 0.13.0
-azd x build
+azd x build --all
 VERSION="$(./bin/ikhemissi-azd-discovery-linux-amd64 version --output json | jq -er '.version')"
 azd x pack --bundle --output ./artifacts
 azd extension install "./artifacts/ikhemissi-azd-discovery_${VERSION}.zip" --force
@@ -45,7 +45,8 @@ azd discovery version
 ```
 
 Install the bundle after building: `azd x build` alone can retain stale provider
-metadata on this tooling version. Use the isolated `AZD_CONFIG_DIR` for native
+metadata on this tooling version. `--all` builds Linux, macOS and Windows for
+amd64 and arm64; omit it for a faster host-only build. Use the isolated `AZD_CONFIG_DIR` for native
 tests. `bin/`, `artifacts/`, and `coverage/` are disposable, Git-ignored outputs.
 Build scripts use `-trimpath` and disable CGO.
 
@@ -53,7 +54,7 @@ To download a tested CI build instead:
 
 ```sh
 gh run download <run-id> --repo ikhemissi/azd-microsoft-discovery \
-  --name discovery-bundle-linux-amd64 --dir ./downloaded-extension
+  --name discovery-bundle --dir ./downloaded-extension
 cd downloaded-extension
 sha256sum --check SHA256SUMS
 azd extension install ./ikhemissi-azd-discovery_<version>.zip --force
@@ -177,7 +178,8 @@ On pushes to `main`, [the release workflow](.github/workflows/release.yml):
 3. Generates notes, preserves older changelog entries, and synchronizes manifest/binary versions.
 4. Runs shared Go checks and native tests on the new-version bundle.
 5. Atomically pushes the release metadata commit and annotated Git tag.
-6. Publishes the exact tested bundle, checksum, and commit-based notes using `gh`.
+6. Publishes the exact tested bundle, its six platform archives, checksums and
+   commit-based notes using `gh`. `SHA256SUMS` lists every published asset.
 
 PR jobs have read-only permissions. Only the release job has `contents: write`,
 using the built-in GitHub token; it needs no Azure credentials or personal token.
@@ -204,5 +206,8 @@ commit/tag, rerun at that release commit while it is still current `main`.
 The workflow can rebuild/test and finish an unpublished draft; only draft assets
 may be replaced. Published releases remain unchanged.
 
-CI and release support remain Linux-only. Cross-platform certification and a
-custom azd registry are separate follow-up work, not prerequisites for this flow.
+Releases build Linux, macOS and Windows binaries for amd64 and arm64. CI runs
+the full suite on Linux amd64; on macOS (arm64, Intel) and Windows amd64 it installs
+the tested bundle with azd 1.35.0 and runs the native read-only commands.
+Deployments, container builds and linux/arm64 and windows/arm64 are not tested.
+A custom azd registry is separate follow-up work, not a prerequisite for this flow.
