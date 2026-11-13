@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 (2026-11-13)
+
+### Bug Fixes
+
+- accept projects whose path goes through a symlink (7d68d8c)
+
+- keep LF line endings so bundles and docs validate on Windows (7f34057)
+
+
+### Features
+
+- publish binaries for all platforms (5414048)
+
+
+
 ## 0.4.0 (2026-11-13)
 
 ### Bug Fixes
