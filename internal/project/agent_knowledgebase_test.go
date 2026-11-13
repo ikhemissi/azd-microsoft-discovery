@@ -94,13 +94,13 @@ func TestAgentKBAttachmentLifecycleAndExplicitRemoval(t *testing.T) {
 	})
 	provider.deps.Cloud = func(context.Context) (*discovery.Client, error) { return client, nil }
 	if _, err := provider.Deploy(t.Context(), sc, nil, nil, nil); err != nil || !clearSeen ||
-		agentCloud.posts != 2 || len(agentCloud.agent.KnowledgeBases) != 0 {
+		agentCloud.posts != 3 || len(agentCloud.agent.KnowledgeBases) != 0 {
 		t.Fatalf("managed attachment removal was not explicit and verified: %v", err)
 	}
 }
 
 func TestAgentCanBindToolsAndKnowledgeBasesTogether(t *testing.T) {
-	provider, project, kbCloud, agentCloud, sc := kbAgentFixture(t, nil)
+	provider, project, _, agentCloud, sc := kbAgentFixture(t, nil)
 	toolProject, _, _ := fixture(t, "reference")
 	tool := toolProject.Services["simulation"]
 	tool.Project = project.Root
@@ -228,7 +228,7 @@ func TestAgentKBAttachmentReadbackAndExportRecovery(t *testing.T) {
 					t.Fatal("mismatching pending agent submission created a duplicate version")
 				}
 				omitAttachment = false
-				agentCloud.agent.KnowledgeBases = []discovery.KnowledgeBaseReference{{KnowledgeBaseID: attachedKBID}}
+				agentCloud.agent.KnowledgeBases = []discovery.KnowledgeBaseReference{{KnowledgeBaseID: attachedKBID, Name: "papers"}}
 			}
 			provider.deps.Export = func(context.Context, string, string) error { return nil }
 			if _, err := provider.Deploy(t.Context(), sc, nil, nil, nil); err != nil || agentCloud.posts != 1 || kbCloud.posts != 1 {
@@ -243,6 +243,7 @@ func TestMultipleAgentKBAttachmentsUseTheirConfiguredSubscriptionClients(t *test
 	_, secondProject, second := knowledgeBaseFixture(t, nil)
 	second.kb.SubscriptionID = otherSubscription
 	second.kb.BookshelfName = "literature-two"
+	second.remote.BookshelfName = second.kb.BookshelfName
 	second.remote.ID = "second-service-returned-id"
 	secondService := secondProject.Services["literature"]
 	secondService.Name, secondService.Project = "other-literature", project.Root
