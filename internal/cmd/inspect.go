@@ -82,7 +82,7 @@ func newInspectCommand(name string, extension *azdext.ExtensionContext, load pro
 				result.Checks = []check{
 					{Name: "configuration", State: "passed", Message: "Local schemas, paths, definitions, supported scope checks, and binding declarations validated."},
 					{Name: "azureReadiness", State: "notChecked", Message: "Authentication, remote resources, RBAC, registry access, networking, and indexing readiness are not checked in this iteration."},
-					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent/KB lifecycle providers and KB attachment are offline-tested. KB indexing and service-returned attachment IDs require live validation."},
+					{Name: "nativeDeployment", State: "implemented", Message: "Tool/agent/KB lifecycle providers, KB indexing and agent KB attachment are implemented and offline-tested."},
 				}
 				result.Services = summarize(project)
 			}

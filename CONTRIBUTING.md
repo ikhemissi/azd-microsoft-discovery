@@ -138,13 +138,13 @@ only the exact documented host exceptions; other mutations/output drift fail.
 - KB deployments index by default. Offline tests must never submit actual jobs.
   Bookshelves and storage registrations are GET-only prerequisites; each source
   identity is declared explicitly and checked against the Bookshelf's workload
-  identities, never inferred. GA KBs have no versions; keep
-  attachment IDs service-authored rather than inventing version paths.
+  identities, never inferred. GA KBs have no versions; agents reference a KB as
+  `/bookshelves/<bookshelf>/knowledgeBases/<name>`, as Discovery Studio does.
   Attachment uses top-level `knowledgeBases` on the existing exposed agent API,
   not `foundryDetails.definition` or pass-through extensions. See the
   [exposed agent model](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/discovery/Discovery.Workspace/_discovery_agent.tsp).
-  It is excluded from generated specs/SDKs; live GA identifier compatibility
-  remains unvalidated while Bookshelf quota prevents an end-to-end test.
+  It is excluded from generated specs/SDKs; attachment and retrieval are
+  live-validated on a single deployment.
 - Data writes require the explicit upload command and `--confirm`. Never put
   uploads, asset registration, conversation attachment or simulation into
   lifecycle hooks. See [data boundaries and sample integration](docs/data-bundles.md).
