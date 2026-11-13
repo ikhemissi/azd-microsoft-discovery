@@ -347,8 +347,9 @@ For literature grounding, declare a `discovery.knowledgebase` service using the
 existing papers asset, then add its service name to the agent's `uses` and
 `config.knowledgeBases`. The [agent + KB example](../examples/knowledgebase/azure.yaml)
 is self-contained for that configuration. Indexing must succeed before agent
-attachment. The service-returned KB ID is used unchanged; live retrieval and
-GA identifier compatibility remain pending validation due Bookshelf quota.
+attachment. The agent references the KB as
+`/bookshelves/<bookshelf>/knowledgeBases/<name>`, as Discovery Studio does;
+attachment and retrieval are live-validated.
 
 | Sample file | Required integration |
 | --- | --- |

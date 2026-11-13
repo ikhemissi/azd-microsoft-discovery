@@ -201,13 +201,14 @@ literature:
   `config.knowledgeBases: [{service: literature}]` on the agent and include
   `literature` in its `uses`. See the [complete agent + KB example](examples/knowledgebase/azure.yaml)
   and [agent definition](examples/knowledgebase/agent.yaml).
-- Attachment uses the KB ID returned by the service, never a constructed
-  `/versions/1`. Deploy/index the KB first; with `autoindex: false`, use the
-  explicit index command before deploying its agent. Missing IDs, stale
-  definitions or unverified indexing block agent submission.
-- Agent attachment is offline-tested but not yet live-validated; Bookshelf
-  quota currently prevents that test. No separate Studio-managed agent is
-  required by the configuration, but live retrieval still needs verification.
+- Agents reference a KB as `/bookshelves/<bookshelf>/knowledgeBases/<name>` with
+  its `name`, the same reference Discovery Studio writes; the Bookshelf-local
+  ID is not accepted. Deploy/index the KB first; with `autoindex: false`, use the
+  explicit index command before deploying its agent. Missing outputs, stale
+  definitions or unverified indexing block agent submission. Removing all
+  attachments omits `knowledgeBases` from the upsert, as Studio does.
+- Agent attachment and retrieval are live-validated: the agent calls the
+  attached KB and cites its sources. No separate Studio-managed agent is required.
 
 ### Reusable input bundles
 
@@ -251,13 +252,16 @@ avoid duplicate immutable versions.
 
 KB exports use `SERVICE_<NAME>_KNOWLEDGE_BASE_ID`, `_NAME`, `_BOOKSHELF_RESOURCE_ID`,
 `_INDEXING_STATUS`, and `_RUN_ID`. The KB ID is server-returned, empty when omitted;
-neither the ID nor run ID is an agent attachment version. Configuration-only
+it is not the agent attachment reference. The Bookshelf reuses one run ID for
+every indexing run of a KB, so a new run is recognized by its status or indexing
+end time, not its ID. Configuration-only
 deployments export observed indexing status, not an assertion of indexed readiness.
 Unchanged `autoindex: false` redeployments retain a previously verified index
 for attachment; changed KB configuration requires a fresh successful index.
 Rerun the **same deploy/index command** to resume an acknowledged indexing operation
-or restore failed exports without another job. An ambiguous indexing POST is
-blocked pending inspection of remote operation history; do not delete its recovery
+or restore failed exports without another job. If an indexing acknowledgement is
+lost but the KB reports a new run, the rerun adopts and verifies that run instead of
+submitting another; with no new run it stays blocked, so do not delete its recovery
 record or blindly retry. A fresh command after completed work starts a new indexing run.
 
 **Diagnostic caveat:** azd 1.35.0 can repair environment metadata before extension

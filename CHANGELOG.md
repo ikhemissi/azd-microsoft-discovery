@@ -4,11 +4,21 @@
 
 - Add `config.knowledgeBases` for agent attachment to declared/indexed KB services.
   Verify dependency state, source configuration and successful indexing with
-  subscription-scoped credentials, then use the service-returned KB ID unchanged.
-- Adapt native agent `knowledgeBases`, verify readback, explicitly clear removed
-  attachments and preserve recovery without duplicate agent versions. Keep
-  unchanged configuration-only KB deployments' verified indexing provenance.
-  Offline tests pass; live GA attachment/retrieval remains pending Bookshelf quota.
+  subscription-scoped credentials, then attach the KB as
+  `/bookshelves/<bookshelf>/knowledgeBases/<name>` with its name, as Studio does.
+- Adapt native agent `knowledgeBases`, verify readback, detach removed
+  attachments by omitting `knowledgeBases` and preserve recovery without duplicate
+  agent versions. Keep unchanged configuration-only KB deployments' verified
+  indexing provenance. Attachment and retrieval are live-validated.
+- Use the GA workspace agent API `2026-06-01`, matching Discovery Studio.
+- Require `userAssignedIdentityResourceId` on KB sources and check it against the
+  Bookshelf workload identities.
+- Send `x-ms-client-request-id` on every Discovery request; `startIndexing`
+  rejects requests without it.
+- Fix KB creation polling forever when the Bookshelf returns the KB itself as the
+  operation location; readiness now uses `provisioningState`.
+- Accept live indexing acknowledgements (operation ID is the run ID), handle run
+  IDs reused across runs, and adopt a submitted run whose acknowledgement was lost.
 - Add optional domain-neutral `discovery.data` sources/datasets and strict
   versioned file/checksum manifests without changing tool/agent authoring.
 - Add local bundle validation and explicit, no-overwrite Blob uploads with

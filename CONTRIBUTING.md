@@ -84,7 +84,7 @@ claim or arbitrary percentage gate. Linux CI also validates:
 - Digest verification, strict agent readback, reconciliation, and recovery.
 - GA KB definition/index operation correlation, automatic/manual indexing,
   subscription overrides, ambiguous submissions, and export restoration without duplicate jobs.
-- Managed agent KB dependencies, service-returned attachment IDs, native
+- Managed agent KB dependencies, Bookshelf-qualified attachment references, native
   payload/readback, removal, indexed readiness and recovery without duplicate versions.
 - Generic data manifests, safe paths, no-write dry-runs, conditional Blob writes,
   full SHA-256 readback, ownership-bound resume, and unchanged runtime-mount guidance.
