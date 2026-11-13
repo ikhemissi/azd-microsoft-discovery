@@ -59,7 +59,8 @@ printf 'version: %s\n' "$version" > extension.yaml
 printf 'package cmd\nvar Version = "%s"\n' "$version" > internal/cmd/version.go
 mkdir -p artifacts
 printf 'offline-test-bundle' > "artifacts/ikhemissi-azd-discovery_${version}.zip"
-(cd artifacts && sha256sum "ikhemissi-azd-discovery_${version}.zip" > SHA256SUMS)
+printf 'offline-test-archive' > artifacts/ikhemissi-azd-discovery-linux-amd64.tar.gz
+(cd artifacts && sha256sum "ikhemissi-azd-discovery_${version}.zip" ikhemissi-azd-discovery-linux-amd64.tar.gz > SHA256SUMS)
 `),
 	} {
 		target := filepath.Join(repo, path)
@@ -139,6 +140,11 @@ esac
 	if err != nil || !strings.Contains(string(calls), "release upload v0.1.1") ||
 		!strings.Contains(string(calls), "release edit v0.1.1") {
 		t.Fatalf("draft recovery did not finish publication: %v %s", err, calls)
+	}
+	for _, asset := range []string{"ikhemissi-azd-discovery_0.1.1.zip", "ikhemissi-azd-discovery-linux-amd64.tar.gz", "SHA256SUMS"} {
+		if strings.Count(string(calls), "artifacts/"+asset) < 2 {
+			t.Fatalf("release create and upload must both publish %s: %s", asset, calls)
+		}
 	}
 	runGit(repo, "commit", "--allow-empty", "-m", "fix: unpushed change")
 	if output, err := execute("0", published, "--dry-run"); err == nil || !strings.Contains(output, "stale") {

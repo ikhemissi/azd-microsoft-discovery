@@ -71,10 +71,14 @@ func TestReleaseTagValidation(t *testing.T) {
 	}
 }
 
-func TestLinuxReleaseBundle(t *testing.T) {
+var releasePlatforms = []string{
+	"darwin/amd64", "darwin/arm64", "linux/amd64", "linux/arm64", "windows/amd64", "windows/arm64",
+}
+
+func TestReleaseBundle(t *testing.T) {
 	path := os.Getenv("DISCOVERY_RELEASE_BUNDLE")
 	if path == "" {
-		t.Skip("set DISCOVERY_RELEASE_BUNDLE to validate a built Linux bundle")
+		t.Skip("set DISCOVERY_RELEASE_BUNDLE to validate a built release bundle")
 	}
 	if filepath.Base(path) != "ikhemissi-azd-discovery_"+cmd.Version+".zip" {
 		t.Fatal("bundle filename does not match the extension version")
@@ -129,29 +133,38 @@ func TestLinuxReleaseBundle(t *testing.T) {
 		t.Fatal("bundle must contain exactly this extension and version")
 	}
 	version := registry.Extensions[0].Versions[0]
-	if version.Version != cmd.Version || len(version.Artifacts) != 1 {
+	if version.Version != cmd.Version || len(version.Artifacts) != len(releasePlatforms) {
 		t.Fatal("bundle version or platform count is incorrect")
 	}
-	artifact, exists := version.Artifacts["linux/amd64"]
-	if !exists || artifact.Checksum.Algorithm != "sha256" ||
-		artifact.EntryPoint != "ikhemissi-azd-discovery-linux-amd64" || strings.Contains(artifact.URL, "://") {
-		t.Fatal("bundle must contain a local Linux amd64 artifact with SHA-256 identity")
+	if len(files) != len(releasePlatforms)+1 {
+		t.Fatal("bundle must contain registry.json and exactly its referenced platform archives")
 	}
-	archive, exists := files[artifact.URL]
-	if !exists || len(files) != 2 {
-		t.Fatal("bundle must contain registry.json and exactly its referenced platform archive")
-	}
-	reader, err = archive.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	hash := sha256.New()
-	_, copyErr := io.Copy(hash, reader)
-	closeErr = reader.Close()
-	if copyErr != nil || closeErr != nil {
-		t.Fatalf("hash bundle artifact: %v %v", copyErr, closeErr)
-	}
-	if hex.EncodeToString(hash.Sum(nil)) != artifact.Checksum.Value {
-		t.Fatal("bundled artifact checksum differs from registry metadata")
+	for _, platform := range releasePlatforms {
+		artifact, exists := version.Artifacts[platform]
+		entryPoint := "ikhemissi-azd-discovery-" + strings.ReplaceAll(platform, "/", "-")
+		if strings.HasPrefix(platform, "windows/") {
+			entryPoint += ".exe"
+		}
+		if !exists || artifact.Checksum.Algorithm != "sha256" ||
+			artifact.EntryPoint != entryPoint || strings.Contains(artifact.URL, "://") {
+			t.Fatalf("bundle must contain a local %s artifact with SHA-256 identity", platform)
+		}
+		archive, exists := files[artifact.URL]
+		if !exists {
+			t.Fatalf("bundle is missing the %s archive %s", platform, artifact.URL)
+		}
+		reader, err := archive.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		hash := sha256.New()
+		_, copyErr := io.Copy(hash, reader)
+		closeErr := reader.Close()
+		if copyErr != nil || closeErr != nil {
+			t.Fatalf("hash %s artifact: %v %v", platform, copyErr, closeErr)
+		}
+		if hex.EncodeToString(hash.Sum(nil)) != artifact.Checksum.Value {
+			t.Fatalf("%s artifact checksum differs from registry metadata", platform)
+		}
 	}
 }
