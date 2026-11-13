@@ -81,6 +81,24 @@ func TestRegistryDigestResolution(t *testing.T) {
 	}
 }
 
+func TestRequestsCarryClientRequestID(t *testing.T) {
+	client := NewClient(credential{})
+	client.WorkspaceEndpoint = "https://demo.workspace.discovery.azure.com"
+	var seen []string
+	client.HTTP.Transport = transport(func(request *http.Request) (*http.Response, error) {
+		seen = append(seen, request.Header.Get("x-ms-client-request-id"))
+		return response(request, 200, `{}`, nil), nil
+	})
+	for range 2 {
+		if _, err := client.Request(t.Context(), http.MethodPost, client.WorkspaceEndpoint+"/fixture", map[string]string{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != 2 || seen[0] == "" || seen[0] == seen[1] {
+		t.Fatalf("requests lack unique x-ms-client-request-id: %q", seen)
+	}
+}
+
 func TestReadinessAndOperationContracts(t *testing.T) {
 	client := NewClient(credential{})
 	client.WorkspaceEndpoint = "https://demo.workspace.discovery.azure.com"

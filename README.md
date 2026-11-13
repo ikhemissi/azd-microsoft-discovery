@@ -47,7 +47,7 @@ but not Go, Node, Rust, developer tooling, or a clone of this repository.
 Choose a version from [GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases):
 
 ```sh
-VERSION=0.2.0
+VERSION=0.3.0
 azd extension install \
   "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
 azd discovery version
@@ -179,9 +179,6 @@ researcher:
 
 ### Knowledge bases
 
-**Unreleased:** KB support requires a [development bundle](CONTRIBUTING.md#build-and-install-a-development-bundle);
-the published `0.2.0` bundle does not include it.
-
 Add a service under `services` in your existing configuration, or use the
 [complete KB example](examples/knowledgebase/azure.yaml):
 
@@ -193,12 +190,17 @@ literature:
     bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
     sources:
       - storageAssetResourceId: ${DISCOVERY_PAPERS_ASSET_ID}
+        userAssignedIdentityResourceId: ${DISCOVERY_MANAGED_IDENTITY_ID}
     autoindex: true
 ```
 
 - Terraform owns the Bookshelf, storage-container/asset registrations, access,
   and optional compute. Sources are **existing Discovery storage-asset ARM IDs**,
   not local folders or Blob URLs; this extension does not upload/register them.
+- Each source needs `userAssignedIdentityResourceId`: a user-assigned managed
+  identity that is one of the Bookshelf's workload identities and can read the
+  asset's Blob data. The Bookshelf rejects sources without it; deployment checks
+  it against the Bookshelf readback before sending the request.
 - Bookshelf lookup defaults to selected `AZURE_SUBSCRIPTION_ID` and
   `AZURE_RESOURCE_GROUP`. Override with `config.subscriptionId` / `resourceGroup`;
   credentials use that subscription's tenant.
@@ -211,8 +213,37 @@ literature:
   falling back to `discovery.nodePoolResourceId`. If neither pool is configured,
   omit it in the API request; do not infer/create/scale compute. Indexing can incur costs.
 - Manual indexing requires an existing KB whose definition matches configuration;
-  deploy definition changes first. Optional source identities are omitted.
-- GA KBs have no versions. **Agent KB attachment is not yet supported.**
+  deploy definition changes first.
+- GA KBs have no versions. In the development build, attach a managed KB with
+  `config.knowledgeBases: [{service: literature}]` on the agent and include
+  `literature` in its `uses`. See the [complete agent + KB example](examples/knowledgebase/azure.yaml)
+  and [agent definition](examples/knowledgebase/agent.yaml).
+- Agents reference a KB as `/bookshelves/<bookshelf>/knowledgeBases/<name>` with
+  its `name`, the same reference Discovery Studio writes; the Bookshelf-local
+  ID is not accepted. Deploy/index the KB first; with `autoindex: false`, use the
+  explicit index command before deploying its agent. Missing outputs, stale
+  definitions or unverified indexing block agent submission. Removing all
+  attachments omits `knowledgeBases` from the upsert, as Studio does.
+- Agent attachment and retrieval are live-validated: the agent calls the
+  attached KB and cites its sources. No separate Studio-managed agent is required.
+
+### Reusable input bundles
+
+Runtime inputs use Discovery resources and per-call mounts, not image rebuilds
+or service `volumes`. Unreleased `azd discovery data prepare` / `validate` and
+explicit `data upload --dry-run` / `--confirm` commands prepare checksummed
+bundles and upload to IaC-owned Blob storage. Declare an existing per-dataset
+`storageAssetResourceId`; `data show <dataset> --agent <service>` verifies it
+and reports the Discovery URI for attachment and agent use. These commands
+never create assets, attach conversations, index inputs or execute uploaded code.
+
+See [data configuration, mount contracts, sample integration and the authorized
+test plan](docs/data-bundles.md), and the [two-bundle example](examples/reusable-data/azure.yaml).
+Blob upload verification is not Discovery attachment or scientific validation.
+Follow the official runtime workflow: attach an experiment asset, select it in
+the agent request, and let the agent supply per-call mounts. Existing code
+environments remain supported; deterministic binding and mandatory runner
+restrictions are not implemented.
 
 ## Commands and recovery
 
@@ -238,11 +269,16 @@ avoid duplicate immutable versions.
 
 KB exports use `SERVICE_<NAME>_KNOWLEDGE_BASE_ID`, `_NAME`, `_BOOKSHELF_RESOURCE_ID`,
 `_INDEXING_STATUS`, and `_RUN_ID`. The KB ID is server-returned, empty when omitted;
-neither the ID nor run ID is an agent attachment version. Configuration-only
+it is not the agent attachment reference. The Bookshelf reuses one run ID for
+every indexing run of a KB, so a new run is recognized by its status or indexing
+end time, not its ID. Configuration-only
 deployments export observed indexing status, not an assertion of indexed readiness.
+Unchanged `autoindex: false` redeployments retain a previously verified index
+for attachment; changed KB configuration requires a fresh successful index.
 Rerun the **same deploy/index command** to resume an acknowledged indexing operation
-or restore failed exports without another job. An ambiguous indexing POST is
-blocked pending inspection of remote operation history; do not delete its recovery
+or restore failed exports without another job. If an indexing acknowledgement is
+lost but the KB reports a new run, the rerun adopts and verifies that run instead of
+submitting another; with no new run it stays blocked, so do not delete its recovery
 record or blindly retry. A fresh command after completed work starts a new indexing run.
 
 ## Documentation
@@ -256,15 +292,18 @@ record or blindly retry. A fresh command after completed work starts a new index
 
 ## Scope and limitations
 
-- Container tools, prompt agents, and GA KBs. Agent KB attachment, uploads, MCP/OpenAPI
+- Container tools, prompt agents, and GA KBs. Automatic
+  Discovery asset registration/conversation attachment, MCP/OpenAPI
   lifecycles, remote builds, `imagePassthrough`, and `publish --to` are unsupported.
+- Raw Blob uploads and agent KB attachment are development-only; the released
+  `0.3.0` bundle does not include these additions.
 - Build publication supports public-cloud ACR and single-image manifests, not
   multi-platform indexes. Immutable reference indexes are accepted.
 - Linux CI and local tests cover azd 1.35.0 and Podman 4.9.3. A working live
   deployment has been reported, but this is not comprehensive cloud, GPU,
   platform, permission, or recovery certification.
-- Discovery adapters use tool/KB API `2026-06-01` and agent workspace API
-  `2026-02-01-preview`; the latter is an API version, not the extension's release status.
+- Discovery adapters use API version `2026-06-01` for tools, knowledge bases
+  and the agent workspace API, the same versions as Discovery Studio.
 
 For local builds, tests, release automation, and development artifacts, see
 [CONTRIBUTING.md](CONTRIBUTING.md). Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
@@ -276,7 +315,7 @@ For local builds, tests, release automation, and development artifacts, see
 | Linux CI and automatic Releases | Working; versions, annotated tags, notes, bundles, and checksums are automated |
 | Broader live validation | Reference mode, Podman publication, redeployment, permissions, and recovery |
 | Newer azd compatibility | Test alongside the pinned minimum |
-| KB support | Lifecycle and recoverable indexing are offline-tested; live API/optional identity/compute behavior and GA agent attachment remain gates |
+| KB support | Lifecycle, indexing and agent attachment are offline-tested; live attachment/retrieval and optional identity/compute behavior remain validation gates |
 | Later features | Friendly storage-source resolution, MCP/OpenAPI tools, uploads, remote diagnostics, GPU certification |
 
 No live KB mutations or indexing have been performed. CI stays Linux-only.

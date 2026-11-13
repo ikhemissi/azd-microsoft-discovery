@@ -14,7 +14,7 @@ func NewRootCommand() *cobra.Command {
 		Use:     "discovery <command> [options]",
 		Version: Version,
 		Short:   "Build and deploy Microsoft Discovery tools, agents, and knowledge bases",
-		Long:    "Community extension for Microsoft Discovery with native tool/agent/KB deployment, explicit indexing, and local plan/doctor checks. Agent KB attachment and live Azure readiness diagnostics are not implemented.",
+		Long:    "Community extension for Microsoft Discovery with native tool/agent/KB deployment and managed KB attachment, explicit indexing, input-bundle preparation/upload, verified IaC asset handoff, and local plan/doctor checks. Automatic conversation attachment and live Azure readiness diagnostics are not implemented.",
 	})
 
 	rootCmd.SilenceUsage = true
@@ -29,6 +29,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newInspectCommand("plan", extCtx, loadProject))
 	rootCmd.AddCommand(newInspectCommand("doctor", extCtx, loadProject))
 	rootCmd.AddCommand(newIndexCommand(extCtx, indexService))
+	rootCmd.AddCommand(newDataCommand(extCtx, dataDependencies{load: loadDataProject, connect: connectData}))
 	rootCmd.AddCommand(newVersionCommand(&extCtx.OutputFormat))
 	rootCmd.AddCommand(newMetadataCommand(rootCmd))
 

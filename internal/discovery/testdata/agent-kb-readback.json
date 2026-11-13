@@ -1,0 +1,21 @@
+{
+  "name": "researcher",
+  "provisioningState": "Succeeded",
+  "humanInTheLoop": "Enabled",
+  "knowledgeBases": [
+    { "knowledgeBaseId": "/bookshelves/literature/knowledgeBases/papers" }
+  ],
+  "discoveryExtensions": {},
+  "foundryDetails": {
+    "versions": {
+      "latest": {
+        "version": "2",
+        "definition": {
+          "kind": "prompt",
+          "model": "chat",
+          "instructions": "Preserve {{runtime}} and ${LITERAL}."
+        }
+      }
+    }
+  }
+}

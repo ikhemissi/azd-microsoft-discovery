@@ -18,6 +18,8 @@ import (
 	"github.com/ikhemissi/azd-microsoft-discovery/internal/state"
 )
 
+const kbIdentityID = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.ManagedIdentity/userAssignedIdentities/reader"
+
 type knowledgeBaseCloud struct {
 	t                                                               *testing.T
 	project                                                         *config.Project
@@ -25,6 +27,7 @@ type knowledgeBaseCloud struct {
 	remote                                                          *discovery.KnowledgeBase
 	patches, posts, clients                                         int
 	exists, asyncConfig, ambiguous, pollError, staleRun, omitRunIDs bool
+	selfOperation, landed, reuseRunID                               bool
 	rejectPost, sourceFailure, poolFailure                          int
 	configStatus, indexStatus                                       string
 }
@@ -35,7 +38,8 @@ func knowledgeBaseFixture(t *testing.T, autoindex *bool) (*Provider, *config.Pro
 	kb := &config.KnowledgeBase{Name: "papers", BookshelfName: "literature",
 		SubscriptionID: authSubscription, ResourceGroup: "demo", Autoindex: autoindex,
 		Description: "Scientific papers", CopilotInstruction: "Ground answers in these papers.",
-		Sources: []config.KnowledgeBaseSource{{StorageAssetResourceID: testScope + "/storageContainers/data/storageAssets/papers"}},
+		Sources: []config.KnowledgeBaseSource{{StorageAssetResourceID: testScope + "/storageContainers/data/storageAssets/papers",
+			UserAssignedIdentityResourceID: kbIdentityID}},
 	}
 	project.Services = map[string]*config.Service{"literature": {
 		Name: "literature", Host: config.KnowledgeBaseHost, Project: project.Root, KnowledgeBase: kb,
@@ -75,6 +79,7 @@ func (f *knowledgeBaseCloud) request(request *http.Request) (*http.Response, err
 		switch id {
 		case config.BookshelfResourceID(f.kb):
 			resource.Properties.BookshelfURI = "https://literature.discovery.azure.com"
+			resource.Properties.WorkloadIdentities = map[string]any{kbIdentityID: map[string]any{}}
 		case f.kb.Sources[0].StorageAssetResourceID:
 			if f.sourceFailure != 0 {
 				status = f.sourceFailure
@@ -96,14 +101,17 @@ func (f *knowledgeBaseCloud) request(request *http.Request) (*http.Response, err
 			if err != nil || json.Unmarshal(data, &definition) != nil {
 				f.t.Fatal("invalid KB PATCH")
 			}
-			if strings.Contains(string(data), "userAssignedIdentity") || strings.Contains(string(data), "version") {
-				f.t.Fatal("identity or KB version was fabricated")
+			if !strings.Contains(string(data), `"userAssignedIdentity":"`+kbIdentityID+`"`) || strings.Contains(string(data), "version") {
+				f.t.Fatal("declared source identity was not sent or a KB version was fabricated")
 			}
 			f.remote.KnowledgeBaseDefinition = definition
 			f.exists = true
 			if f.asyncConfig {
 				headers.Set("Operation-Location", "/knowledgeBases/papers/operations/config-op?api-version=2026-06-01")
 				f.remote.ProvisioningState = "Updating"
+			} else if f.selfOperation {
+				headers.Set("Operation-Location", "/knowledgeBases/papers?api-version=2026-06-01")
+				f.remote.ProvisioningState = "Succeeded"
 			} else {
 				f.remote.ProvisioningState = "Succeeded"
 			}
@@ -136,11 +144,18 @@ func (f *knowledgeBaseCloud) request(request *http.Request) (*http.Response, err
 			break
 		}
 		if f.ambiguous {
+			if f.landed {
+				f.remote.LastIndexingRun = &discovery.IndexingRun{RunID: "run-landed", Status: f.indexStatus}
+			}
 			return nil, errors.New("offline acknowledgement lost")
 		}
 		op, run := fmt.Sprintf("op-%d", f.posts), fmt.Sprintf("run-%d", f.posts)
+		id := op
+		if f.reuseRunID {
+			op, run, id = "op-run", "op-run", "/knowledgeBases/papers/versions/default"
+		}
 		headers.Set("Operation-Location", "/knowledgeBases/papers/operations/"+op+"?api-version=2026-06-01")
-		body = map[string]any{"id": op, "status": "Running"}
+		body = map[string]any{"id": id, "status": "Running"}
 		if !f.omitRunIDs {
 			body.(map[string]any)["result"] = map[string]any{"runId": run}
 		}
@@ -158,13 +173,17 @@ func (f *knowledgeBaseCloud) request(request *http.Request) (*http.Response, err
 			status = 403
 		}
 		op, run := path.Base(request.URL.Path), fmt.Sprintf("run-%d", f.posts)
+		if f.reuseRunID {
+			run = op
+		}
 		result := &discovery.KnowledgeBaseOperation{ID: op, Status: f.indexStatus, OperationType: "Indexing"}
 		if !f.omitRunIDs {
 			result.IndexingResult = &discovery.IndexingRun{RunID: run}
 		}
 		if !f.staleRun && f.indexStatus == "Succeeded" {
 			f.remote.Status = "Succeeded"
-			f.remote.LastIndexingRun = &discovery.IndexingRun{RunID: run, Status: "Succeeded"}
+			f.remote.LastIndexingRun = &discovery.IndexingRun{RunID: run, Status: "Succeeded",
+				Metrics: &discovery.IndexingMetrics{IndexingEndTimeUTC: fmt.Sprintf("end-%d", f.posts)}}
 		}
 		body = result
 	default:
@@ -317,6 +336,38 @@ func TestKnowledgeBaseAmbiguityTerminalFailureAndStaleRun(t *testing.T) {
 	}
 }
 
+func TestKnowledgeBaseAmbiguousSubmissionAdoptsLandedRun(t *testing.T) {
+	provider, _, cloud := knowledgeBaseFixture(t, nil)
+	cloud.ambiguous, cloud.landed, cloud.indexStatus = true, true, "Running"
+	if _, err := deployKnowledgeBase(t, provider); err == nil {
+		t.Fatal("lost acknowledgement was accepted")
+	}
+	cloud.ambiguous = false
+	if _, err := deployKnowledgeBase(t, provider); err == nil || cloud.posts != 1 {
+		t.Fatalf("running landed run was accepted or resubmitted: %v", err)
+	}
+	cloud.remote.LastIndexingRun.Status = "Succeeded"
+	result, err := deployKnowledgeBase(t, provider)
+	if err != nil || cloud.posts != 1 || result.Artifacts[0].Metadata["runId"] != "run-landed" {
+		t.Fatalf("landed run was not adopted without resubmission: %v", err)
+	}
+}
+
+func TestKnowledgeBaseReindexWithReusedRunID(t *testing.T) {
+	provider, _, cloud := knowledgeBaseFixture(t, nil)
+	cloud.reuseRunID = true
+	if _, err := deployKnowledgeBase(t, provider); err != nil || cloud.posts != 1 {
+		t.Fatalf("live acknowledgement shape was rejected: %v", err)
+	}
+	if _, err := provider.Index(t.Context(), "literature", nil); err != nil || cloud.posts != 2 {
+		t.Fatalf("re-index with a reused run ID was not verified: %v", err)
+	}
+	cloud.staleRun = true
+	if _, err := provider.Index(t.Context(), "literature", nil); err == nil || cloud.posts != 3 {
+		t.Fatalf("stale readback of a reused run ID was accepted: %v", err)
+	}
+}
+
 func TestKnowledgeBaseIndexRequiresDeployedMatchingDefinition(t *testing.T) {
 	disabled := false
 	provider, _, cloud := knowledgeBaseFixture(t, &disabled)
@@ -380,6 +431,32 @@ func TestKnowledgeBaseReadbackFailureDoesNotDiscardAcknowledgedIndex(t *testing.
 	cloud.remote.ProvisioningState, cloud.indexStatus = "Succeeded", "Succeeded"
 	if _, err := deployKnowledgeBase(t, provider); err != nil || cloud.posts != 1 {
 		t.Fatalf("acknowledged operation did not recover after transient readback failure: %v", err)
+	}
+}
+
+func TestKnowledgeBaseSelfOperationLocationUsesProvisioningState(t *testing.T) {
+	disabled := false
+	provider, project, cloud := knowledgeBaseFixture(t, &disabled)
+	cloud.selfOperation = true
+	if _, err := deployKnowledgeBase(t, provider); err != nil || cloud.patches != 1 || cloud.posts != 0 {
+		t.Fatalf("KB self Operation-Location was polled as an operation: %v", err)
+	}
+	store, err := state.Open(project.Root, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := config.BookshelfResourceID(cloud.kb) + "/knowledgeBases/papers"
+	record, err := store.Read("literature", scope)
+	if err != nil || record == nil || record.Operation != "" {
+		t.Fatalf("KB self URL was persisted as an operation: %+v (%v)", record, err)
+	}
+	record.Phase = "kb-config-polling"
+	record.Operation = "https://literature.discovery.azure.com/knowledgeBases/papers?api-version=2026-06-01"
+	if err := store.Write(record); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deployKnowledgeBase(t, provider); err != nil || cloud.patches != 1 || cloud.posts != 0 {
+		t.Fatalf("recorded KB self URL did not resume from provisioningState: %v", err)
 	}
 }
 

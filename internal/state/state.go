@@ -30,6 +30,7 @@ type Record struct {
 type Indexing struct {
 	AcknowledgedRunID string `json:"acknowledgedRunId,omitempty"`
 	PreviousRunID     string `json:"previousRunId,omitempty"`
+	PreviousRunEnd    string `json:"previousRunEnd,omitempty"`
 	CompletedRunID    string `json:"completedRunId,omitempty"`
 }
 

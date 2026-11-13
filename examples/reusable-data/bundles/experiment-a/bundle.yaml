@@ -1,0 +1,5 @@
+schemaVersion: "1.0"
+files:
+  - path: input.txt
+    size: 22
+    sha256: c1ac6b5a0339732150ec5782ca60ace7159f9b8e0dae7ee113b0caa061241882

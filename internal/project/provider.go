@@ -54,10 +54,7 @@ func (c containerRPC) Publish(ctx context.Context, request *azdext.ContainerPubl
 
 func NewWithClient(client *azdext.AzdClient, environment string) *Provider {
 	selected := func(ctx context.Context) (string, error) {
-		if environment != "" {
-			return environment, nil
-		}
-		return currentEnvironment(ctx, client)
+		return ResolveEnvironment(ctx, client, environment)
 	}
 	credential := func(ctx context.Context) (*azdext.TokenProvider, error) {
 		name, err := selected(ctx)

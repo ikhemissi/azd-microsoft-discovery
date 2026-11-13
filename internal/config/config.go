@@ -62,6 +62,9 @@ func parse(root string, document map[string]any, lookup Lookup, deferred bool) (
 	if err := validateScopeMode(project.Discovery, deferred); err != nil {
 		return nil, err
 	}
+	if err := validateData(&project.Discovery, deferred); err != nil {
+		return nil, err
+	}
 	rawServices, ok := document["services"].(map[string]any)
 	if !ok || len(rawServices) == 0 {
 		return nil, errors.New("azure.yaml requires declared services")

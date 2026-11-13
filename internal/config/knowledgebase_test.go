@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func knowledgeBaseSource() map[string]any {
+	return map[string]any{"storageAssetResourceId": scope + "/storageContainers/data/storageAssets/papers",
+		"userAssignedIdentityResourceId": identityScope + "/userAssignedIdentities/reader"}
+}
+
+const identityScope = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/demo/providers/Microsoft.ManagedIdentity"
+
 func knowledgeBaseDocument() map[string]any {
 	return map[string]any{
 		"name": "demo",
@@ -13,7 +20,7 @@ func knowledgeBaseDocument() map[string]any {
 		"services": map[string]any{"papers": map[string]any{
 			"host": KnowledgeBaseHost, "config": map[string]any{
 				"bookshelfName": "literature",
-				"sources":       []any{map[string]any{"storageAssetResourceId": scope + "/storageContainers/data/storageAssets/papers"}},
+				"sources":       []any{knowledgeBaseSource()},
 			},
 		}},
 	}
@@ -52,7 +59,7 @@ func TestKnowledgeBaseDefaultsOverridesAndDeferredOutputs(t *testing.T) {
 	delete(options, "subscriptionId")
 	delete(options, "resourceGroup")
 	options["bookshelfName"] = "${BOOKSHELF}"
-	options["sources"] = []any{map[string]any{"storageAssetResourceId": "${SOURCE}"}}
+	options["sources"] = []any{map[string]any{"storageAssetResourceId": "${SOURCE}", "userAssignedIdentityResourceId": "${IDENTITY}"}}
 	if _, err := ParseForPackage(root, document, noValues); err != nil {
 		t.Fatalf("Package required provisioned KB inputs: %v", err)
 	}
@@ -69,11 +76,22 @@ func TestKnowledgeBaseInvalidConfiguration(t *testing.T) {
 		"group":        func(c map[string]any) { c["resourceGroup"] = "unsafe/group" },
 		"no sources":   func(c map[string]any) { c["sources"] = []any{} },
 		"blob": func(c map[string]any) {
-			c["sources"] = []any{map[string]any{"storageAssetResourceId": "https://blob.example/papers"}}
+			source := knowledgeBaseSource()
+			source["storageAssetResourceId"] = "https://blob.example/papers"
+			c["sources"] = []any{source}
 		},
 		"duplicate": func(c map[string]any) {
-			c["sources"] = []any{map[string]any{"storageAssetResourceId": scope + "/storageContainers/data/storageAssets/papers"},
-				map[string]any{"storageAssetResourceId": strings.ToUpper(scope + "/storageContainers/data/storageAssets/papers")}}
+			upper := knowledgeBaseSource()
+			upper["storageAssetResourceId"] = strings.ToUpper(scope + "/storageContainers/data/storageAssets/papers")
+			c["sources"] = []any{knowledgeBaseSource(), upper}
+		},
+		"missing source identity": func(c map[string]any) {
+			c["sources"] = []any{map[string]any{"storageAssetResourceId": scope + "/storageContainers/data/storageAssets/papers"}}
+		},
+		"source identity type": func(c map[string]any) {
+			source := knowledgeBaseSource()
+			source["userAssignedIdentityResourceId"] = scope + "/storageContainers/data/storageAssets/papers"
+			c["sources"] = []any{source}
 		},
 		"identity": func(c map[string]any) { c["userAssignedIdentity"] = "not-supported" },
 		"pool":     func(c map[string]any) { c["nodePoolResourceId"] = workspace },
@@ -90,8 +108,7 @@ func TestKnowledgeBaseInvalidConfiguration(t *testing.T) {
 	document := knowledgeBaseDocument()
 	services := document["services"].(map[string]any)
 	services["second"] = map[string]any{"host": KnowledgeBaseHost, "config": map[string]any{
-		"name": "papers", "bookshelfName": "literature", "sources": []any{map[string]any{
-			"storageAssetResourceId": scope + "/storageContainers/data/storageAssets/papers"}},
+		"name": "papers", "bookshelfName": "literature", "sources": []any{knowledgeBaseSource()},
 	}}
 	if _, err := Parse(t.TempDir(), document, scopeValues); err == nil {
 		t.Fatal("duplicate managed KB accepted")

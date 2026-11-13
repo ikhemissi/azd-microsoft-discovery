@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
@@ -29,9 +30,73 @@ func knowledgeBaseDefinition(kb *config.KnowledgeBase) discovery.KnowledgeBaseDe
 	}
 	for _, source := range kb.Sources {
 		definition.StorageAssetReferences = append(definition.StorageAssetReferences,
-			discovery.StorageAssetReference{ID: source.StorageAssetResourceID})
+			discovery.StorageAssetReference{ID: source.StorageAssetResourceID, UserAssignedIdentity: source.UserAssignedIdentityResourceID})
 	}
 	return definition
+}
+
+func (p *Provider) verifiedKnowledgeBaseID(ctx context.Context, store *state.Store, service *config.Service) (id string, err error) {
+	if service == nil || service.KnowledgeBase == nil || p.deps.CloudInSubscription == nil {
+		return "", errors.New("knowledge-base attachment requires a declared KB and subscription-scoped credentials")
+	}
+	unlock, err := store.Lock(ctx, service.Name)
+	if err != nil {
+		return "", err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+	kb := service.KnowledgeBase
+	scope := config.BookshelfResourceID(kb) + "/knowledgeBases/" + kb.Name
+	record, err := store.Read(service.Name, scope)
+	if err != nil {
+		return "", err
+	}
+	source, err := sourceHash(service)
+	if err != nil {
+		return "", err
+	}
+	if record == nil || record.Source != source || (record.Phase != "complete" && record.Phase != "verified") ||
+		record.Indexing == nil || record.Indexing.CompletedRunID == "" {
+		return "", errors.New("KB attachment dependency is missing, stale, pending or not indexed; deploy and index the KB first")
+	}
+	client, err := p.deps.CloudInSubscription(ctx, kb.SubscriptionID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := client.ResolveBookshelf(ctx, config.BookshelfResourceID(kb)); err != nil {
+		return "", err
+	}
+	definition := knowledgeBaseDefinition(kb)
+	if err := client.ValidateKnowledgeBaseSources(ctx, definition); err != nil {
+		return "", err
+	}
+	remote, err := client.ReadyKnowledgeBase(ctx, kb.Name, kb.BookshelfName)
+	if err != nil {
+		return "", err
+	}
+	if err := discovery.VerifyKnowledgeBase(remote, definition); err != nil {
+		return "", err
+	}
+	if remote.LastIndexingRun == nil || remote.LastIndexingRun.Status != "Succeeded" ||
+		remote.LastIndexingRun.RunID != record.Indexing.CompletedRunID ||
+		(remote.Status != "" && remote.Status != "Succeeded") {
+		return "", errors.New("KB attachment requires the successful indexing run verified by this service; reconcile/index it before deploying the agent")
+	}
+	if err := config.ValidateKnowledgeBaseID(remote.ID); err != nil {
+		return "", fmt.Errorf("GA KB readback has no usable attachment identifier; no version or fallback ID will be constructed: %w", err)
+	}
+	if !strings.EqualFold(record.Outputs["bookshelfResourceId"], config.BookshelfResourceID(kb)) ||
+		record.Outputs["knowledgeBaseId"] != remote.ID {
+		return "", errors.New("KB attachment identity differs from verified deployment outputs; refresh the KB deployment")
+	}
+	// Agents reference KBs by Bookshelf-qualified path; the Bookshelf-local ID is rejected.
+	return "/bookshelves/" + kb.BookshelfName + "/knowledgeBases/" + kb.Name, nil
+}
+
+// newIndexingRun reports whether run differs from the run recorded before submission.
+// Submission is refused while a run is active, so a Running run is always new.
+func newIndexingRun(run *discovery.IndexingRun, previous *state.Indexing) bool {
+	return run != nil && run.RunID != "" && (run.RunID != previous.PreviousRunID ||
+		run.Status == "Running" || run.EndTime() != previous.PreviousRunEnd)
 }
 
 func knowledgeBaseFailure(store *state.Store, record *state.Record, err error, submitting bool) error {
@@ -51,6 +116,7 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 	if kb == nil || p.deps.CloudInSubscription == nil {
 		return nil, errors.New("knowledge-base configuration and subscription-scoped cloud client are required")
 	}
+	shouldIndex := indexOnly || kb.Autoindex == nil || *kb.Autoindex
 	client, err := p.deps.CloudInSubscription(ctx, kb.SubscriptionID)
 	if err != nil {
 		return nil, err
@@ -106,6 +172,13 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 	if resuming && (record.Desired != desired || record.Source != source) {
 		return nil, errors.New("pending KB work belongs to different configuration/action; restore it and rerun the original deploy/index command before changing it")
 	}
+	var previousIndex *state.Indexing
+	previousID := ""
+	if !resuming && !shouldIndex && record != nil && record.Phase == "complete" && record.Source == source &&
+		record.Indexing != nil && record.Indexing.CompletedRunID != "" {
+		copy := *record.Indexing
+		previousIndex, previousID = &copy, record.Outputs["knowledgeBaseId"]
+	}
 	if !resuming {
 		record = &state.Record{SchemaVersion: 1, Scope: scope, Service: service.Name, Source: source,
 			Desired: desired, Phase: "kb-ready"}
@@ -126,7 +199,7 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 	}
 	switch record.Phase {
 	case "kb-config-submitting", "kb-config-polling":
-		if record.Operation != "" {
+		if record.Operation != "" && !client.IsKnowledgeBaseURL(kb.Name, record.Operation) {
 			if err := client.ValidateBookshelfOperationURL(record.Operation); err != nil {
 				return nil, err
 			}
@@ -149,13 +222,16 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 	if err := discovery.VerifyKnowledgeBase(remote, definition); err != nil {
 		return nil, fmt.Errorf("KB configuration is not verified; deploy it before indexing, or inspect the pending update: %w", err)
 	}
+	if previousIndex != nil && remote.ID == previousID && remote.LastIndexingRun != nil &&
+		remote.LastIndexingRun.RunID == previousIndex.CompletedRunID && remote.LastIndexingRun.Status == "Succeeded" {
+		record.Indexing = previousIndex
+	}
 	if record.Phase == "kb-config-submitting" || record.Phase == "kb-config-polling" {
 		record.Phase, record.Operation = "kb-ready", ""
 		if err := store.Write(record); err != nil {
 			return nil, err
 		}
 	}
-	shouldIndex := indexOnly || kb.Autoindex == nil || *kb.Autoindex
 	if record.Phase == "kb-ready" && shouldIndex {
 		if remote.Status == "Running" || (remote.LastIndexingRun != nil && remote.LastIndexingRun.Status == "Running") {
 			return nil, errors.New("KB already has an active indexing run outside this recovery record; wait for it before starting another")
@@ -170,6 +246,7 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 		record.Indexing = &state.Indexing{}
 		if remote.LastIndexingRun != nil {
 			record.Indexing.PreviousRunID = remote.LastIndexingRun.RunID
+			record.Indexing.PreviousRunEnd = remote.LastIndexingRun.EndTime()
 		}
 		record.Phase = "kb-index-submitting"
 		if err := store.Write(record); err != nil {
@@ -189,7 +266,19 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 		}
 	}
 	if record.Phase == "kb-index-submitting" {
-		return nil, errors.New("indexing submission outcome is ambiguous; inspect the Bookshelf operation history and recover its operation URL before retrying; no duplicate job was submitted")
+		run := remote.LastIndexingRun
+		if record.Indexing == nil || !newIndexingRun(run, record.Indexing) {
+			return nil, errors.New("indexing submission outcome is ambiguous; inspect the Bookshelf operation history and recover its operation URL before retrying; no duplicate job was submitted")
+		}
+		// A run newer than the one recorded before submitting means the submission landed.
+		switch run.Status {
+		case "Succeeded":
+			record.Indexing.CompletedRunID = run.RunID
+		case "Failed", "Canceled", "Cancelled":
+			return nil, knowledgeBaseFailure(store, record, &discovery.OperationError{State: run.Status}, false)
+		default:
+			return nil, fmt.Errorf("submitted indexing run %s is %s; rerun this command once it finishes to verify it, no duplicate job will be submitted", run.RunID, run.Status)
+		}
 	}
 	if record.Phase == "kb-index-polling" {
 		if record.Indexing == nil || record.Operation == "" {
@@ -215,7 +304,7 @@ func (p *Provider) runKnowledgeBase(ctx context.Context, project *config.Project
 		if err := discovery.VerifyKnowledgeBaseIndexing(remote, operation, record.Indexing.AcknowledgedRunID); err != nil {
 			return nil, err
 		}
-		if remote.LastIndexingRun.RunID == record.Indexing.PreviousRunID {
+		if !newIndexingRun(remote.LastIndexingRun, record.Indexing) {
 			return nil, errors.New("indexing readback still describes the previous run; rerun to resume verification, not a new submission")
 		}
 		record.Indexing.CompletedRunID = remote.LastIndexingRun.RunID

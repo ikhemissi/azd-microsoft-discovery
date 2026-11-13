@@ -16,10 +16,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/google/uuid"
 )
 
 const ARMVersion = "2026-06-01"
-const AgentVersion = "2026-02-01-preview"
+const AgentVersion = "2026-06-01"
 const ARMEndpoint = "https://management.azure.com"
 const maxBody = 4 << 20
 
@@ -28,8 +29,10 @@ type Client struct {
 	HTTP              *http.Client
 	WorkspaceEndpoint string
 	bookshelfEndpoint string
-	Sleep             func(context.Context, time.Duration) error
-	Progress          func(string)
+	// Lower-cased ARM IDs of the resolved Bookshelf's workload identities.
+	bookshelfIdentities map[string]bool
+	Sleep               func(context.Context, time.Duration) error
+	Progress            func(string)
 }
 
 type Resource struct {
@@ -37,10 +40,11 @@ type Resource struct {
 	Name       string `json:"name"`
 	Location   string `json:"location"`
 	Properties struct {
-		ProvisioningState string         `json:"provisioningState"`
-		Version           string         `json:"version"`
-		Definition        map[string]any `json:"definitionContent"`
-		BookshelfURI      string         `json:"bookshelfUri"`
+		ProvisioningState  string         `json:"provisioningState"`
+		Version            string         `json:"version"`
+		Definition         map[string]any `json:"definitionContent"`
+		BookshelfURI       string         `json:"bookshelfUri"`
+		WorkloadIdentities map[string]any `json:"workloadIdentities"`
 	} `json:"properties"`
 }
 
@@ -140,6 +144,8 @@ func (c *Client) Request(ctx context.Context, method, address string, body any) 
 	if u.Host != "management.azure.com" {
 		scope = "https://discovery.azure.com/.default"
 	}
+	// Bookshelf startIndexing rejects requests without it; reused across retries for correlation.
+	clientRequestID := uuid.NewString()
 	for attempt := 0; ; attempt++ {
 		token, err := c.Credential.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{scope}})
 		if err != nil {
@@ -151,6 +157,7 @@ func (c *Client) Request(ctx context.Context, method, address string, body any) 
 		}
 		request.Header.Set("Authorization", "Bearer "+token.Token)
 		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("x-ms-client-request-id", clientRequestID)
 		// Copy to enforce redirects even if an injected client forgot to configure them.
 		client := *c.HTTP
 		client.CheckRedirect = func(*http.Request, []*http.Request) error {
