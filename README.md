@@ -41,7 +41,7 @@ for amd64 and arm64. CI fully tests Linux amd64 and runs read-only smoke tests o
 macOS (arm64, Intel) and Windows amd64. No Go or repository clone needed.
 
 ```sh
-VERSION=0.4.0
+VERSION=0.5.0
 azd extension install \
   "https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
 azd discovery version
