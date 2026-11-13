@@ -3,7 +3,7 @@ id: ikhemissi.azd.discovery
 namespace: discovery
 displayName: Microsoft Discovery Community Extension
 description: Deploy Discovery tools, agents and knowledge bases, and explicitly validate/upload reusable input bundles.
-version: 0.3.0
+version: 0.4.0
 requiredAzdVersion: ">=1.35.0"
 language: go
 capabilities:

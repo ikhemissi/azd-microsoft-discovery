@@ -1,39 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-13)
 
-- Add `config.knowledgeBases` for agent attachment to declared/indexed KB services.
-  Verify dependency state, source configuration and successful indexing with
-  subscription-scoped credentials, then attach the KB as
-  `/bookshelves/<bookshelf>/knowledgeBases/<name>` with its name, as Studio does.
-- Adapt native agent `knowledgeBases`, verify readback, detach removed
-  attachments by omitting `knowledgeBases` and preserve recovery without duplicate
-  agent versions. Keep unchanged configuration-only KB deployments' verified
-  indexing provenance. Attachment and retrieval are live-validated.
-- Use the GA workspace agent API `2026-06-01`, matching Discovery Studio.
-- Require `userAssignedIdentityResourceId` on KB sources and check it against the
-  Bookshelf workload identities.
-- Send `x-ms-client-request-id` on every Discovery request; `startIndexing`
-  rejects requests without it.
-- Fix KB creation polling forever when the Bookshelf returns the KB itself as the
-  operation location; readiness now uses `provisioningState`.
-- Accept live indexing acknowledgements (operation ID is the run ID), handle run
-  IDs reused across runs, and adopt a submitted run whose acknowledgement was lost.
-- Add optional domain-neutral `discovery.data` sources/datasets and strict
-  versioned file/checksum manifests without changing tool/agent authoring.
-- Add local bundle validation and explicit, no-overwrite Blob uploads with
-  no-write dry-runs, tenant-aware azd authentication, project/storage scope
-  verification, full content readback, completion markers and resumable ownership.
-- Preserve/test runtime-mount descriptions and native output settings. Document
-  verified mount contracts, separate Discovery attachment/registration gates,
-  read-only sample integration guidance and an authorized two-bundle test plan.
-- Follow the official attached-asset/agent-mediated runtime workflow, preserving
-  code-environment flexibility; defer deterministic binding and additional
-  execution restrictions pending experience from authorized experiments.
-- Add local `data prepare` checksum generation and read-only `data show`
-  handoff reports. Verify per-dataset IaC-owned storage assets against their
-  exact Blob directory paths and include asset IDs/Discovery URIs in upload
-  results without creating assets or attaching/invoking conversations.
+### Bug Fixes
+
+- align knowledge-base lifecycle with the live Bookshelf API (4e8b3c0)
+
+- attach knowledge bases to agents the way Discovery Studio does (c3f9777)
+
+
+### Features
+
+- add reusable input bundles and agent KB attachments (7151213)
+
+
 
 ## 0.3.0 (2026-10-12)
 
