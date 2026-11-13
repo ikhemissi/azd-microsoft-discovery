@@ -1,5 +1,11 @@
 # Microsoft Discovery extension for azd
 
+[![CI](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml/badge.svg)](https://github.com/ikhemissi/azd-microsoft-discovery/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ikhemissi/azd-microsoft-discovery)](https://github.com/ikhemissi/azd-microsoft-discovery/releases)
+[![azd](https://img.shields.io/badge/azd-%E2%89%A5%201.35.0-0078D4)](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
+[![Platform](https://img.shields.io/badge/platform-linux%2Famd64-lightgrey)](#install)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Deploy Microsoft Discovery tools, prompt agents and Bookshelf knowledge bases
 from one `azure.yaml`, with the same `azd provision` / `azd deploy` workflow you
 use for the rest of Azure.
